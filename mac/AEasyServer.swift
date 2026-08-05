@@ -1046,11 +1046,21 @@ func makeCameraStream(for src: Source, device: AVCaptureDevice) throws {
     }
     session.addOutput(out)
 
-    // cap the device at the configured FPS where the format allows it
-    if let range = device.activeFormat.videoSupportedFrameRateRanges.first,
+    // cap the device at the configured FPS where the format allows it. Virtual cameras
+    // (OBS) expose discrete ranges like "30.00-30.00" whose true duration is 1000000/30000030,
+    // so a hand-built CMTime(1, 30) lands outside the range and AVFoundation throws an
+    // uncatchable NSInvalidArgumentException — always clamp with the range's own CMTimes.
+    let want = Double(src.fps)
+    if let range = device.activeFormat.videoSupportedFrameRateRanges
+        .min(by: { abs($0.maxFrameRate - want) < abs($1.maxFrameRate - want) }),
        (try? device.lockForConfiguration()) != nil {
-        let fps = min(Double(src.fps), range.maxFrameRate)
-        device.activeVideoMinFrameDuration = CMTime(value: 1, timescale: Int32(fps))
+        if range.maxFrameRate <= want {
+            device.activeVideoMinFrameDuration = range.minFrameDuration
+        } else if range.minFrameRate >= want {
+            device.activeVideoMinFrameDuration = range.maxFrameDuration
+        } else {
+            device.activeVideoMinFrameDuration = CMTime(value: 1, timescale: Int32(want))
+        }
         device.unlockForConfiguration()
     }
 

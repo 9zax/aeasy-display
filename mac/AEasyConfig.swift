@@ -177,7 +177,8 @@ final class PaneCanvasView: NSView {
             path.stroke()
             NSColor.controlAccentColor.setFill()
             CGRect(x: r.maxX - 12, y: r.maxY - 12, width: 12, height: 12).fill()
-            let label = p.src.replacingOccurrences(of: "window:", with: "")
+            let label = p.src == "display" ? "Extended display"
+                      : p.src.replacingOccurrences(of: "window:", with: "")
                              .replacingOccurrences(of: "camera:", with: "📷 ")
             let attrs: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: 10),
@@ -409,6 +410,10 @@ final class App: NSObject, NSApplicationDelegate {
         fpsLabel.stringValue = "\(Int(fps.doubleValue)) fps"
         bitrateLabel.stringValue = String(format: "%.1f Mbps", bitrate.doubleValue)
         scaleLabel.stringValue = "\(Int(scale.doubleValue))% of phone panel"
+        // relabel the canvas panes to the picked sources right away; the real layout
+        // (including added/removed panes) still arrives from the server after restart
+        let ids = pickedSources()
+        for i in canvas.panes.indices where i < ids.count { canvas.panes[i].src = ids[i] }
     }
 
     @objc func saveTapped() {
