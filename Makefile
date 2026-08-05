@@ -17,7 +17,8 @@ help: ## show this help
 	@echo "AEasy Display — targets:"
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-13s %s\n", $$1, $$2}'
 
-build: mac/aeasy-server mac/aeasy-config mac/aeasy-tray ## build the macOS binaries
+build: ## build the macOS binaries (always fresh)
+	@$(MAKE) -B mac/aeasy-server mac/aeasy-config mac/aeasy-tray
 
 # multi-file swiftc allows top-level code only in a file literally named main.swift
 mac/aeasy-server: mac/AEasyServer.swift mac/Protocol.swift mac/virtual-display.h
