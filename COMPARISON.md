@@ -1,103 +1,105 @@
-# AEasy Display เทียบกับ open source เจ้าอื่น
+# AEasy Display vs other open source projects
 
-เทียบกับโปรเจกต์ open source ที่ใกล้เคียงกัน: [scrcpy](https://github.com/Genymobile/scrcpy), [Deskreen](https://github.com/pavlobu/deskreen), [Weylus](https://github.com/H-M-H/Weylus), [VirtScreen](https://github.com/kbumsik/VirtScreen), [Sunshine](https://github.com/LizardByte/Sunshine)+[Moonlight](https://moonlight-stream.org/)
-(ตัวดัง ๆ อย่าง Duet Display, spacedesk, superDisplay ไม่รวมเพราะเป็น closed source)
+<p align="center"><b>English</b> · <a href="COMPARISON.th.md">ภาษาไทย</a></p>
 
-## ตารางรวม — โจทย์ "เอาอุปกรณ์อื่นมาเป็นจอเสริม"
+Compared against the closest open source projects: [scrcpy](https://github.com/Genymobile/scrcpy), [Deskreen](https://github.com/pavlobu/deskreen), [Weylus](https://github.com/H-M-H/Weylus), [VirtScreen](https://github.com/kbumsik/VirtScreen), [Sunshine](https://github.com/LizardByte/Sunshine)+[Moonlight](https://moonlight-stream.org/)
+(Popular options like Duet Display, spacedesk, and superDisplay are excluded — they're closed source.)
+
+## Overview — the "use another device as a second display" problem
 
 | | AEasy Display | Deskreen | Weylus | VirtScreen | Sunshine + Moonlight |
 |---|---|---|---|---|---|
-| ฝั่งคอม | macOS เท่านั้น | Win / macOS / Linux | Win / macOS / Linux | Linux (X11) เท่านั้น | Win / macOS / Linux |
-| ฝั่งจอเสริม | Android (แอป viewer) | ทุกอย่างที่มี browser | ทุกอย่างที่มี browser | ทุกอย่างที่รับ VNC ได้ | Android / iOS / อื่น ๆ (แอป Moonlight) |
-| สร้าง virtual display ให้เอง | ✅ (`CGVirtualDisplay`) | ❌ ต้องมี dummy plug หรือทำ virtual display เอง | ⚠️ Linux เท่านั้น (macOS = มิเรอร์อย่างเดียว) | ✅ (xrandr) | ❌ ต้องมี dummy plug หรือ BetterDisplay ช่วย |
-| การเชื่อมต่อ | USB เท่านั้น (zero network) | Wi-Fi (WebRTC) | Wi-Fi (WebRTC/WebSocket) | Wi-Fi (VNC) | Wi-Fi / LAN (มี hw encode) |
-| ความหน่วง | ต่ำ (hw encode/decode ทั้งสาย) | ปานกลาง–สูง (software encode ผ่าน browser) | ปานกลาง (มี hw encode บางแพลตฟอร์ม) | สูง (VNC ไม่เหมาะกับวิดีโอ) | ต่ำมาก (ออกแบบมาเพื่อเกม) |
-| ส่ง input กลับ (touch/ปากกา) | ❌ | ❌ | ✅ จุดขายหลัก (stylus แรงกด — Linux เท่านั้น) | ✅ ผ่าน VNC | ✅ (เมาส์/คีย์/จอย) |
-| หมุนจออัตโนมัติ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| สถานะโปรเจกต์ | ใหม่ | active แต่ virtual display "อยู่ใน roadmap" มานาน | active | ⚠️ หยุดพัฒนา (commit สุดท้าย 2018) | active มาก ชุมชนใหญ่ |
+| Computer side | macOS only | Win / macOS / Linux | Win / macOS / Linux | Linux (X11) only | Win / macOS / Linux |
+| Display side | Android (viewer app) | anything with a browser | anything with a browser | anything with a VNC client | Android / iOS / more (Moonlight app) |
+| Creates the virtual display for you | ✅ (`CGVirtualDisplay`) | ❌ needs a dummy plug or DIY virtual display | ⚠️ Linux only (macOS = mirror only) | ✅ (xrandr) | ❌ needs a dummy plug or BetterDisplay |
+| Transport | USB only (zero network) | Wi-Fi (WebRTC) | Wi-Fi (WebRTC/WebSocket) | Wi-Fi (VNC) | Wi-Fi / LAN (hw encode) |
+| Latency | low (hw encode/decode end to end) | medium–high (software encode via browser) | medium (hw encode on some platforms) | high (VNC isn't built for video) | very low (built for game streaming) |
+| Input back (touch/stylus) | ❌ | ❌ | ✅ its main selling point (pressure stylus — Linux only) | ✅ via VNC | ✅ (mouse/keyboard/gamepad) |
+| Auto-rotation | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Project status | new | active, but virtual display has been "on the roadmap" for years | active | ⚠️ abandoned (last commit 2018) | very active, large community |
 
-## สรุปรายเจ้า
+## Project by project
 
-### Deskreen — จอเสริมผ่าน browser, สาย Wi-Fi
-- **เด่น**: ฝั่งรับไม่ต้องลงอะไรเลย เปิด browser ก็ใช้ได้ ใช้ได้กับ iPad/มือถือ/โน้ตบุ๊กอีกเครื่อง, cross-platform
-- **ด้อย**: ไม่สร้าง virtual display ให้ — ถ้าอยาก "extend" จริงต้องเสียบ dummy plug เอง ไม่งั้นได้แค่มิเรอร์, encode ด้วยซอฟต์แวร์ผ่าน Electron+WebRTC กิน CPU และหน่วงกว่า, ต้องอยู่ Wi-Fi เดียวกัน
+### Deskreen — second screen in a browser, over Wi-Fi
+- **Strengths**: nothing to install on the receiving side — just open a browser; works with an iPad, a phone, or another laptop; cross-platform.
+- **Weaknesses**: doesn't create a virtual display — to truly *extend* you need a dummy plug yourself, otherwise it's mirror-only; software encoding via Electron+WebRTC costs CPU and latency; both devices must share a Wi-Fi network.
 
-### Weylus — เน้นเป็นเมาส์/ปากกา มากกว่าจอเสริม
-- **เด่น**: ส่ง input กลับได้เต็มรูปแบบ — ใช้แท็บเล็ตเป็น graphic tablet แรงกด/tilt ได้ (Linux), เบามาก (Rust binary เดียว), ฝั่งรับใช้ browser
-- **ด้อย**: ฟีเจอร์เด็ด ๆ (stylus แรงกด, virtual monitor, window capture) เป็นของ Linux เท่านั้น — บน macOS เหลือแค่มิเรอร์จอ+ควบคุมพื้นฐาน, ผ่าน Wi-Fi
+### Weylus — a mouse/pen first, a second screen second
+- **Strengths**: full input back to the computer — use a tablet as a graphics tablet with pressure/tilt (Linux); very light (a single Rust binary); the receiving side is just a browser.
+- **Weaknesses**: the killer features (pressure stylus, virtual monitor, window capture) are Linux-only — on macOS you're left with basic mirroring and control; Wi-Fi only.
 
-### VirtScreen — แนวคิดเดียวกับ AEasy แต่ฝั่ง Linux
-- **เด่น**: สร้าง virtual display จริงด้วย xrandr แล้วแชร์ผ่าน VNC — ครบจบในตัวเหมือนกัน
-- **ด้อย**: Linux/X11 เท่านั้น (ไม่รองรับ Wayland), VNC ไม่เหมาะกับภาพเคลื่อนไหว หน่วงสูง, **หยุดพัฒนาไปแล้วตั้งแต่ 2018**
+### VirtScreen — same idea as AEasy, but for Linux
+- **Strengths**: creates a real virtual display via xrandr and shares it over VNC — same all-in-one approach.
+- **Weaknesses**: Linux/X11 only (no Wayland); VNC is a poor fit for moving pictures, so latency is high; **abandoned since 2018**.
 
-### Sunshine + Moonlight — ท่อวิดีโอที่เร็วที่สุด แต่ต้องประกอบเอง
-- **เด่น**: ความหน่วงต่ำสุดในกลุ่ม (ออกแบบมาสตรีมเกม, hw encode H.264/HEVC/AV1), client มีทุกแพลตฟอร์มรวมถึง Android, ชุมชนใหญ่พัฒนาต่อเนื่อง
-- **ด้อย**: เป็น game-streaming ไม่ใช่เครื่องมือจอเสริม — บน macOS ต้องหา virtual display เองด้วย dummy plug หรือ [BetterDisplay](https://github.com/waydabber/BetterDisplay) (freemium) แล้วชี้ Sunshine ให้สตรีมจอนั้น, setup หลายชิ้น, ผ่านเครือข่าย
+### Sunshine + Moonlight — the fastest video pipe, but you assemble it yourself
+- **Strengths**: lowest latency of the group (built for game streaming; hw encode H.264/HEVC/AV1); clients on every platform including Android; big, active community.
+- **Weaknesses**: it's game streaming, not a second-display tool — on macOS you must supply the virtual display yourself with a dummy plug or [BetterDisplay](https://github.com/waydabber/BetterDisplay) (freemium) and point Sunshine at it; multiple moving parts; runs over the network.
 
-### จุดยืนของ AEasy Display ในกลุ่มนี้
-เป็นตัวเดียวที่ **"จอเสริม macOS → Android ผ่านสาย USB จบในคำสั่งเดียว"** — สร้าง virtual display เอง, hw encode/decode ตลอดสาย, ไม่ใช้เครือข่าย, หมุนจอตามเครื่อง แลกกับการที่รองรับแค่ macOS+Android, USB เท่านั้น และไม่มีการส่ง touch กลับ
+### Where AEasy Display fits
+The only one that does **"macOS → Android second display over a USB cable, in one command"** — creates its own virtual display, hardware encode/decode end to end, zero network, and the display rotates with the phone. The trade-off: macOS+Android only, USB only, and no touch input back.
 
 ---
 
-# ภาคผนวก: เจาะลึก vs scrcpy
+# Appendix: AEasy Display vs scrcpy in depth
 
-> ข้อสำคัญ: สองตัวนี้**แก้ปัญหาคนละโจทย์ ทิศทางตรงกันข้ามกัน**
+> Key point: these two solve **opposite problems, in opposite directions**
 >
-> - **AEasy Display** — ส่งภาพ **Mac → Android**: เปลี่ยนมือถือให้เป็น*จอเสริม*ของ Mac
-> - **scrcpy** — ส่งภาพ **Android → PC**: *มิเรอร์และควบคุม*หน้าจอมือถือจากคอมพิวเตอร์
+> - **AEasy Display** — streams **Mac → Android**: turns the phone into a *second display* for the Mac
+> - **scrcpy** — streams **Android → PC**: *mirrors and controls* the phone from a computer
 >
-> จึงไม่ใช่คู่แข่งกันโดยตรง — ใช้ร่วมกันได้ด้วยซ้ำ ตารางนี้เทียบให้เห็นว่าโจทย์ไหนควรใช้ตัวไหน
+> So they're not direct competitors — you can even run both at once. This table shows which tool fits which job.
 
-## เปรียบเทียบภาพรวม
+## At a glance
 
 | | AEasy Display | scrcpy |
 |---|---|---|
-| ทิศทางภาพ | Mac → Android (จอเสริม) | Android → PC (มิเรอร์มือถือ) |
-| โจทย์หลัก | เพิ่มพื้นที่หน้าจอให้ Mac | ดู/ควบคุมมือถือจากคอม |
-| แพลตฟอร์มฝั่งคอม | macOS 13+ เท่านั้น | Windows / macOS / Linux |
-| ฝั่งมือถือ | ต้องติดตั้งแอป viewer (APK) | ไม่ต้องลงแอป (push server ผ่าน adb อัตโนมัติ) |
-| การเชื่อมต่อ | USB เท่านั้น (`adb reverse`) | USB หรือ Wi-Fi (TCP/IP) |
-| เสียง | ไม่มี | มี (Android 11+, forward เสียงมาที่คอม) |
-| ควบคุมอีกฝั่งได้ไหม | ไม่ได้ (มือถือเป็นจอแสดงผลอย่างเดียว) | ได้เต็มรูปแบบ (เมาส์ คีย์บอร์ด clipboard ลากไฟล์) |
-| วิดีโอ | H.264 hardware encode/decode | H.264 / H.265 / AV1 |
-| ความเสถียร/วุฒิภาวะ | โปรเจกต์ใหม่ ขนาดเล็ก | ใช้กันมานาน ชุมชนใหญ่ (100k+ stars) |
+| Video direction | Mac → Android (second display) | Android → PC (phone mirroring) |
+| Core job | more screen space for the Mac | view/control the phone from a computer |
+| Computer side | macOS 13+ only | Windows / macOS / Linux |
+| Phone side | viewer app required (APK) | no app needed (server pushed via adb automatically) |
+| Transport | USB only (`adb reverse`) | USB or Wi-Fi (TCP/IP) |
+| Audio | none | yes (Android 11+, forwarded to the computer) |
+| Control the other side? | no (the phone is display-only) | full control (mouse, keyboard, clipboard, drag-and-drop files) |
+| Video | H.264 hardware encode/decode | H.264 / H.265 / AV1 |
+| Maturity | new, small project | battle-tested, huge community (100k+ stars) |
 
-## จุดเด่น AEasy Display
+## AEasy Display strengths
 
-- **ทำสิ่งที่ scrcpy ทำไม่ได้บน macOS** — สร้าง virtual display จริงบน Mac (`CGVirtualDisplay`) ให้ลากหน้าต่างไปวางบนมือถือได้เหมือนจอเสริมแท้ ๆ
-- **Zero network** — ทุกอย่างวิ่งผ่านสาย USB (`adb reverse`) ไม่แย่ง Wi-Fi ใช้กลางแจ้ง/บนรถได้
-- **Auto mode** — วัด frame-drop จริงแล้วลดคุณภาพให้อัตโนมัติถ้าเครื่องถอดรหัสไม่ทัน
-- **Auto-rotation** — หมุนมือถือแล้ว virtual display ฝั่ง Mac หมุนตาม (portrait ↔ landscape) ใช้พื้นที่จอเต็มแผง
-- **Mirror รายแอป** — `aeasy mirror Safari` ส่งเฉพาะหน้าต่างแอปเดียวไปโชว์บนมือถือ
-- **Hardware ทั้งสาย** — ScreenCaptureKit + VideoToolbox ฝั่ง Mac, MediaCodec ฝั่ง Android กิน CPU ต่ำ
+- **Does what scrcpy can't on macOS** — creates a real virtual display (`CGVirtualDisplay`) so you can drag windows onto the phone like a genuine second monitor
+- **Zero network** — everything runs over the USB cable (`adb reverse`); never fights your Wi-Fi, works on the go
+- **Auto mode** — measures the real frame-drop rate and steps quality down automatically if the phone's decoder can't keep up
+- **Auto-rotation** — rotate the phone and the Mac-side virtual display follows (portrait ↔ landscape), always using the full panel
+- **Per-app mirroring** — `aeasy mirror Safari` streams a single app window to the phone
+- **Hardware all the way** — ScreenCaptureKit + VideoToolbox on the Mac, MediaCodec on Android; low CPU use
 
-## จุดด้อย AEasy Display (เทียบ scrcpy)
+## AEasy Display weaknesses (vs scrcpy)
 
-- macOS เท่านั้น — ไม่มี Windows/Linux
-- ต้อง build/ติดตั้ง APK ลงมือถือก่อน
-- ไม่มีเสียง (จอเสริมส่วนใหญ่ไม่จำเป็น แต่ scrcpy มี)
-- USB เท่านั้น — ไม่มีโหมด wireless
-- เฟรมเรตเพดาน 30fps, codec มีแค่ H.264
-- โปรเจกต์ใหม่ — ecosystem/เอกสาร/การทดสอบยังเทียบ scrcpy ไม่ได้
+- macOS only — no Windows/Linux
+- requires building/installing an APK on the phone first
+- no audio (rarely needed for a second display, but scrcpy has it)
+- USB only — no wireless mode
+- 30fps ceiling, H.264 only
+- young project — ecosystem/docs/testing can't compare to scrcpy yet
 
-## จุดเด่น scrcpy
+## scrcpy strengths
 
-- **ควบคุมมือถือได้เต็มรูปแบบ** — พิมพ์ คลิก ลากไฟล์ แชร์ clipboard สองทาง
-- **ไม่ต้องลงแอปบนมือถือ** — push server binary ผ่าน adb ให้เองทุกครั้ง
-- **ครบเครื่อง** — เสียง, บันทึกวิดีโอ, กล้องเป็น webcam, OTG/UHID keyboard, H.265/AV1
-- **Cross-platform + Wi-Fi** — ใช้ได้ทุก OS หลัก ทั้งมีสายและไร้สาย
-- **แบตเตอรี่ความเชื่อมั่นสูง** — พัฒนาต่อเนื่องหลายปี ผู้ใช้จำนวนมาก บั๊กถูกไล่เก็บไปเยอะแล้ว
+- **Full phone control** — type, click, drag files, two-way clipboard
+- **No app on the phone** — pushes its server binary via adb every time
+- **Feature-complete** — audio, video recording, camera-as-webcam, OTG/UHID keyboard, H.265/AV1
+- **Cross-platform + Wi-Fi** — every major OS, wired or wireless
+- **High confidence** — years of active development, huge user base, most bugs long since shaken out
 
-## จุดด้อย scrcpy (สำหรับโจทย์ "จอเสริม")
+## scrcpy weaknesses (for the "second display" job)
 
-- **ทำมือถือเป็นจอเสริมของ Mac ไม่ได้** — ทิศทางภาพกลับด้านกับ AEasy
-  (scrcpy 3.x มี `--new-display` แต่นั่นคือสร้าง virtual display *ฝั่ง Android* เพื่อรันแอป Android แสดงบนคอม — ยังเป็นทิศ Android → PC อยู่ดี)
-- เป็น CLI ล้วน ตัวเลือกเยอะ ต้องอ่านเอกสารพอสมควร
+- **Can't turn the phone into a second display for the Mac** — its video direction is the reverse of AEasy's
+  (scrcpy 3.x has `--new-display`, but that creates a virtual display *on the Android side* to run Android apps on your computer — still Android → PC)
+- CLI-only with a lot of flags; expect to read the docs
 
-## สรุป: เลือกตัวไหน
+## Which one, in short
 
-| อยากทำอะไร | ใช้ |
+| You want to… | Use |
 |---|---|
-| เอามือถือมาเป็นจอที่สองของ Mac | **AEasy Display** |
-| ดู/เล่น/ควบคุมมือถือจากคอม, demo แอป, ตอบแชตมือถือบนคอม | **scrcpy** |
-| ทั้งสองอย่าง | ใช้คู่กันได้ — คนละทิศทาง ไม่ชนกัน |
+| use the phone as a second monitor for the Mac | **AEasy Display** |
+| view/play/control the phone from the computer, demo apps, answer phone chats on the desktop | **scrcpy** |
+| both | run both — opposite directions, they don't conflict |

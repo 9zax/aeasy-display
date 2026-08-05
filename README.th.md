@@ -26,7 +26,7 @@
 └─────────────────────┘                              └──────────────┘
 ```
 
-เทียบกับ scrcpy, Deskreen, Weylus และเจ้าอื่น ๆ เป็นยังไง? ดู [COMPARISON.md](COMPARISON.md)
+เทียบกับ scrcpy, Deskreen, Weylus และเจ้าอื่น ๆ เป็นยังไง? ดู [COMPARISON.th.md](COMPARISON.th.md)
 
 ## ทำงานยังไง
 
