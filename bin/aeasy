@@ -784,7 +784,11 @@ case "${1:-start}" in
     ;;
   install-app)
     migrate >/dev/null 2>&1
-    slot=$(pick_slot "$2")
+    # an explicit arg that is NOT an added device is a raw Android serial — it must
+    # not fall back to the default slot, or an iOS-only registry hijacks the install
+    if [[ -n "$2" ]]; then slot=$(as_slot "$2" 2>/dev/null)
+    else slot=$(pick_slot "")
+    fi
     if [[ -n "$slot" && "$(dev_plat $slot)" == ios ]] || [[ ! -f "$APK" && -d "$SHARE/ios-src" ]]; then
       # free-Apple-ID flow: refresh the working copy every time (a Homebrew upgrade must
       # not leave a stale app), open Xcode, user signs with their own account and Runs.
