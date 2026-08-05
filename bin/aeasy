@@ -271,7 +271,12 @@ case "${1:-start}" in
         echo "⚠️  Plug in the USB cable first — it's only needed once to enable Wi-Fi mode" >&2; exit 1
       fi
       command adb -d tcpip 5555 >/dev/null; sleep 1
-      IP=$(command adb -d shell ip route 2>/dev/null | awk '/wlan/ {print $9; exit}')
+      # `ip route get` names the src field explicitly — positional $9 broke on devices
+      # whose first wlan line is a default route or carries a `table` column
+      IP=$(command adb -d shell ip route get 1.1.1.1 2>/dev/null \
+        | awk '{for(i=1;i<NF;i++) if($i=="src"){print $(i+1); exit}}')
+      [[ -z "$IP" ]] && IP=$(command adb -d shell ip route 2>/dev/null \
+        | awk '/dev wlan/ && /src/ {for(i=1;i<NF;i++) if($i=="src"){print $(i+1); exit}}')
       if [[ -z "$IP" ]]; then echo "⚠️  Couldn't find the phone's IP — is it on Wi-Fi?" >&2; exit 1; fi
       command adb connect "$IP:5555" >/dev/null || { echo "⚠️  adb connect $IP:5555 failed" >&2; exit 1; }
       mkdir -p "$SHARE"
