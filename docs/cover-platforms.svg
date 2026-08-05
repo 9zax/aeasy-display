@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" font-family="-apple-system,'SF Pro Display','Segoe UI','Noto Sans Thai','Leelawadee UI',Thonburi,Helvetica,Arial,sans-serif">
+  <defs>
+    <linearGradient id="aurora" x1="754" y1="194" x2="1258" y2="480" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6366F1"/>
+      <stop offset="0.45" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#818CF8"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+    <filter id="blob" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="70"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" fill="#0B1220"/>
+  <circle cx="180" cy="-40" r="280" fill="#6366F1" opacity="0.20" filter="url(#blob)"/>
+  <circle cx="1160" cy="700" r="300" fill="#06B6D4" opacity="0.16" filter="url(#blob)"/>
+
+  <!-- brand row -->
+  <g transform="translate(80,56) scale(0.117)">
+    <rect width="512" height="512" rx="116" fill="#1E1B4B"/>
+    <g filter="url(#glow)" opacity="0.65">
+      <rect x="108" y="144" width="208" height="132" rx="6" fill="url(#aurora)"/>
+      <rect x="340" y="186" width="90" height="190" rx="14" fill="url(#aurora)"/>
+    </g>
+    <path d="M212,304 C212,368 300,402 340,402 C368,402 386,400 386,388" fill="none" stroke="#475569" stroke-width="9" stroke-linecap="round"/>
+    <rect x="96" y="132" width="232" height="156" rx="14" fill="#E2E8F0"/>
+    <rect x="108" y="144" width="208" height="132" rx="6" fill="#6366F1"/>
+    <rect x="76" y="288" width="272" height="16" rx="8" fill="#CBD5E1"/>
+    <rect x="330" y="176" width="110" height="210" rx="22" fill="#E2E8F0"/>
+    <rect x="340" y="186" width="90" height="190" rx="14" fill="#8B5CF6"/>
+  </g>
+  <text x="156" y="96" font-size="28" font-weight="600" fill="#E2E8F0">AEasy Display</text>
+
+  <!-- headline -->
+  <text x="80" y="230" font-size="52" font-weight="800" fill="#F8FAFC">Android + iOS become</text>
+  <text x="80" y="296" font-size="52" font-weight="800" fill="url(#accent)">touchscreen Mac displays</text>
+
+  <!-- subline -->
+  <text x="80" y="356" font-size="24" fill="#94A3B8">Same features everywhere — touch to click and drag,</text>
+  <text x="80" y="392" font-size="24" fill="#94A3B8">USB-C or Wi-Fi, up to 3 panes, hardware H.264/HEVC.</text>
+
+  <!-- pills -->
+  <g font-size="19" fill="#CBD5E1">
+    <rect x="80" y="440" width="256" height="44" rx="22" fill="#131C2E" stroke="#334155"/>
+    <text x="208" y="468" text-anchor="middle">Android — available now</text>
+    <rect x="356" y="440" width="286" height="44" rx="22" fill="#131C2E" stroke="#334155"/>
+    <text x="499" y="468" text-anchor="middle">iPhone &amp; iPad — in the works</text>
+  </g>
+
+  <text x="80" y="576" font-size="19" fill="#64748B">macOS 13+ · Android 8+ · Phones and tablets · Free &amp; open source</text>
+
+  <!-- illustration: Mac + Android + iPhone -->
+  <g>
+    <!-- glow -->
+    <g filter="url(#glow)" opacity="0.55">
+      <rect x="754" y="194" width="262" height="166" rx="8" fill="url(#aurora)"/>
+      <rect x="1040" y="250" width="98" height="226" rx="16" fill="url(#aurora)"/>
+      <rect x="1159" y="267" width="90" height="214" rx="16" fill="url(#aurora)"/>
+    </g>
+
+    <!-- cable: laptop → Android -->
+    <path d="M880,392 C880,472 950,512 1030,506 C1060,504 1080,500 1080,488" fill="none" stroke="#475569" stroke-width="9" stroke-linecap="round"/>
+    <circle cx="922" cy="486" r="4.5" fill="#22D3EE"/>
+    <circle cx="990" cy="510" r="4.5" fill="#22D3EE"/>
+    <!-- wireless option -->
+    <g transform="translate(952,438)" stroke="#22D3EE" fill="none" stroke-width="3" stroke-linecap="round" opacity="0.9">
+      <path d="M-14,-4 a20,20 0 0 1 28,0"/>
+      <path d="M-8,3 a11,11 0 0 1 16,0"/>
+      <circle cx="0" cy="9" r="2.5" fill="#22D3EE" stroke="none"/>
+    </g>
+
+    <!-- MacBook -->
+    <rect x="740" y="180" width="290" height="194" rx="16" fill="#E2E8F0"/>
+    <rect x="754" y="194" width="262" height="166" rx="8" fill="url(#aurora)"/>
+    <rect x="712" y="374" width="346" height="18" rx="9" fill="#CBD5E1"/>
+    <rect x="856" y="374" width="56" height="8" rx="4" fill="#94A3B8"/>
+
+    <!-- Android phone: punch-hole camera + floating panes -->
+    <rect x="1028" y="238" width="122" height="250" rx="26" fill="#E2E8F0"/>
+    <rect x="1040" y="250" width="98" height="226" rx="16" fill="url(#aurora)"/>
+    <circle cx="1089" cy="264" r="4" fill="#0F172A" fill-opacity="0.55"/>
+    <rect x="1048" y="300" width="52" height="40" rx="5" fill="#0F172A" fill-opacity="0.55" stroke="#F8FAFC" stroke-opacity="0.75" stroke-width="1.5"/>
+    <rect x="1048" y="300" width="52" height="7" rx="3.5" fill="#F8FAFC" fill-opacity="0.35"/>
+    <rect x="1072" y="352" width="58" height="46" rx="5" fill="#0F172A" fill-opacity="0.55" stroke="#F8FAFC" stroke-opacity="0.75" stroke-width="1.5"/>
+    <rect x="1072" y="352" width="58" height="7" rx="3.5" fill="#F8FAFC" fill-opacity="0.35"/>
+    <text x="1089" y="530" text-anchor="middle" font-size="20" font-weight="600" fill="#94A3B8">Android</text>
+
+    <!-- iPhone: Dynamic Island + touch ripple -->
+    <rect x="1148" y="256" width="112" height="236" rx="28" fill="#E2E8F0"/>
+    <rect x="1159" y="267" width="90" height="214" rx="18" fill="url(#aurora)"/>
+    <rect x="1184" y="277" width="40" height="11" rx="5.5" fill="#0F172A" fill-opacity="0.85"/>
+    <circle cx="1204" cy="420" r="10" fill="none" stroke="#22D3EE" stroke-width="2" opacity="0.9"/>
+    <circle cx="1204" cy="420" r="3.5" fill="#22D3EE"/>
+    <text x="1204" y="530" text-anchor="middle" font-size="20" font-weight="600" fill="#94A3B8">iPhone · iPad</text>
+  </g>
+</svg>
