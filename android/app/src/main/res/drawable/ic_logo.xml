@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- same artwork as /logo.svg (and ic_launcher_foreground), cropped tight for the arrange button -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="512" android:viewportHeight="512">
+    <group android:pivotX="258" android:pivotY="267"
+        android:scaleX="1.25" android:scaleY="1.25"
+        android:translateX="-2" android:translateY="-11">
+        <!-- cable: laptop → phone -->
+        <path android:pathData="M212,304 C212,368 300,402 340,402 C368,402 386,400 386,388"
+            android:strokeColor="#FF475569" android:strokeWidth="9" android:strokeLineCap="round"/>
+        <path android:fillColor="#FF22D3EE"
+            android:pathData="M233.5,382 a4.5,4.5 0 1 0 9,0 a4.5,4.5 0 1 0 -9,0 z"/>
+        <path android:fillColor="#FF22D3EE"
+            android:pathData="M299.5,399 a4.5,4.5 0 1 0 9,0 a4.5,4.5 0 1 0 -9,0 z"/>
+        <path android:fillColor="#FF64748B"
+            android:pathData="M382,380 h8 a4,4 0 0 1 4,4 v4 a4,4 0 0 1 -4,4 h-8 a4,4 0 0 1 -4,-4 v-4 a4,4 0 0 1 4,-4 z"/>
+        <!-- MacBook -->
+        <path android:fillColor="#FFE2E8F0"
+            android:pathData="M110,132 h204 a14,14 0 0 1 14,14 v128 a14,14 0 0 1 -14,14 h-204 a14,14 0 0 1 -14,-14 v-128 a14,14 0 0 1 14,-14 z"/>
+        <path android:pathData="M114,144 h196 a6,6 0 0 1 6,6 v120 a6,6 0 0 1 -6,6 h-196 a6,6 0 0 1 -6,-6 v-120 a6,6 0 0 1 6,-6 z">
+            <aapt:attr name="android:fillColor">
+                <gradient android:startX="108" android:startY="150"
+                    android:endX="430" android:endY="370" android:type="linear">
+                    <item android:offset="0" android:color="#FF6366F1"/>
+                    <item android:offset="0.45" android:color="#FF8B5CF6"/>
+                    <item android:offset="1" android:color="#FF22D3EE"/>
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path android:fillColor="#FFCBD5E1"
+            android:pathData="M84,288 h256 a8,8 0 0 1 8,8 a8,8 0 0 1 -8,8 h-256 a8,8 0 0 1 -8,-8 a8,8 0 0 1 8,-8 z"/>
+        <path android:fillColor="#FF94A3B8"
+            android:pathData="M190,288 h44 v3.5 a3.5,3.5 0 0 1 -3.5,3.5 h-37 a3.5,3.5 0 0 1 -3.5,-3.5 z"/>
+        <!-- phone, standing in front -->
+        <path android:fillColor="#FFE2E8F0"
+            android:pathData="M352,176 h66 a22,22 0 0 1 22,22 v166 a22,22 0 0 1 -22,22 h-66 a22,22 0 0 1 -22,-22 v-166 a22,22 0 0 1 22,-22 z"/>
+        <path android:pathData="M354,186 h62 a14,14 0 0 1 14,14 v162 a14,14 0 0 1 -14,14 h-62 a14,14 0 0 1 -14,-14 v-162 a14,14 0 0 1 14,-14 z">
+            <aapt:attr name="android:fillColor">
+                <gradient android:startX="108" android:startY="150"
+                    android:endX="430" android:endY="370" android:type="linear">
+                    <item android:offset="0" android:color="#FF6366F1"/>
+                    <item android:offset="0.45" android:color="#FF8B5CF6"/>
+                    <item android:offset="1" android:color="#FF22D3EE"/>
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path android:fillColor="#8C0F172A"
+            android:pathData="M381.5,198 a3.5,3.5 0 1 0 7,0 a3.5,3.5 0 1 0 -7,0 z"/>
+    </group>
+</vector>

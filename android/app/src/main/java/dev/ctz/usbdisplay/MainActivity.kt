@@ -18,6 +18,7 @@ import android.view.View
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.TextView
 import org.json.JSONArray
 import org.json.JSONObject
@@ -68,7 +69,7 @@ class MainActivity : Activity() {
 
     private lateinit var root: RootLayout
     private lateinit var overlay: BorderOverlay
-    private lateinit var toggle: TextView
+    private lateinit var toggle: ImageView
     private lateinit var banner: TextView
     private lateinit var control: ControlClient
 
@@ -113,20 +114,16 @@ class MainActivity : Activity() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             visibility = View.GONE
         }
-        toggle = TextView(this).apply {
-            text = getString(R.string.arrange_toggle)
-            contentDescription = getString(R.string.arrange_toggle_desc) + ": " + text
-            setTextColor(Color.WHITE)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            gravity = Gravity.CENTER
+        toggle = ImageView(this).apply {
+            setImageResource(R.drawable.ic_logo)
+            contentDescription = getString(R.string.arrange_toggle_desc) + ": " + getString(R.string.arrange_toggle)
             background = GradientDrawable().apply {
-                cornerRadius = 24 * density
+                shape = GradientDrawable.OVAL
                 setColor(0x99000000.toInt())
                 setStroke((1 * density).toInt(), 0x66FFFFFF)
             }
-            val padH = (16 * density).toInt()
-            val padV = (12 * density).toInt()
-            setPadding(padH, padV, padH, padV)
+            val pad = (7 * density).toInt()
+            setPadding(pad, pad, pad, pad)
             isClickable = true
             setOnClickListener { setArrange(!arrange) }
             setOnLongClickListener { resetLayout(); true }
@@ -138,9 +135,9 @@ class MainActivity : Activity() {
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP))
         // added last: touch dispatch walks children in reverse, so the toggle wins inside
         // its own box and is never consulted anywhere else
+        val toggleSize = (40 * density).toInt()
         root.addView(toggle, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
-            Gravity.BOTTOM or Gravity.END))
+            toggleSize, toggleSize, Gravity.BOTTOM or Gravity.END))
         toggle.addOnLayoutChangeListener { _, l, t, r, b, _, _, _, _ ->
             root.toggleRect = Rect(l, t, r, b)
         }
@@ -312,8 +309,11 @@ class MainActivity : Activity() {
         root.arrange = on
         overlay.arrange = on
         overlay.invalidate()
-        toggle.text = getString(if (on) R.string.arrange_toggle_done else R.string.arrange_toggle)
-        toggle.contentDescription = getString(R.string.arrange_toggle_desc) + ": " + toggle.text
+        // no label anymore — arrange state reads as a solid white ring
+        (toggle.background as GradientDrawable).setStroke(
+            ((if (on) 2 else 1) * density).toInt(), if (on) 0xFFFFFFFF.toInt() else 0x66FFFFFF)
+        toggle.contentDescription = getString(R.string.arrange_toggle_desc) + ": " +
+            getString(if (on) R.string.arrange_toggle_done else R.string.arrange_toggle)
         root.announceForAccessibility(getString(if (on) R.string.arrange_on else R.string.arrange_off))
     }
 
