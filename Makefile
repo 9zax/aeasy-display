@@ -2,13 +2,16 @@
 SHARE  := $(HOME)/.local/share/aeasy
 BIN    := $(HOME)/.local/bin
 GRADLE ?= $(shell command -v gradle 2>/dev/null || echo /opt/homebrew/opt/gradle@8/bin/gradle)
+# Without an explicit target swiftc builds against the host SDK version (minos 26.0),
+# so the README's "macOS 13+" would not launch there and newer-than-13 APIs compile silently.
+SWIFTC := swiftc -O -target $(shell uname -m)-apple-macos13.0
 export ANDROID_HOME ?= $(HOME)/Library/Android/sdk
 ifeq ($(wildcard $(ANDROID_HOME)),)
 export ANDROID_HOME := /opt/homebrew/share/android-commandlinetools
 endif
 
 .DEFAULT_GOAL := help
-.PHONY: help build apk install install-app run start stop status clean
+.PHONY: help build apk check smoke install install-app run start stop status clean
 
 help: ## show this help
 	@echo "AEasy Display — targets:"
@@ -17,17 +20,26 @@ help: ## show this help
 build: mac/aeasy-server mac/aeasy-config mac/aeasy-tray ## build the macOS binaries
 
 mac/aeasy-server: mac/AEasyServer.swift mac/virtual-display.h
-	cd mac && swiftc -O -import-objc-header virtual-display.h -o aeasy-server AEasyServer.swift
+	cd mac && $(SWIFTC) -import-objc-header virtual-display.h -o aeasy-server AEasyServer.swift
 
 mac/aeasy-config: mac/AEasyConfig.swift
-	cd mac && swiftc -O -o aeasy-config AEasyConfig.swift
+	cd mac && $(SWIFTC) -o aeasy-config AEasyConfig.swift
 
 mac/aeasy-tray: mac/AEasyTray.swift
-	cd mac && swiftc -O -o aeasy-tray AEasyTray.swift
+	cd mac && $(SWIFTC) -o aeasy-tray AEasyTray.swift
 
 apk: ## build the Android viewer app (needs Android SDK)
 	cd android && $(GRADLE) :app:assembleDebug
 	@echo "APK: android/app/build/outputs/apk/debug/app-debug.apk"
+
+mac/check: mac/Protocol.swift mac/check.swift
+	cd mac && $(SWIFTC) -o check Protocol.swift check.swift
+
+check: mac/check ## run the protocol assertions (pure, no permissions — this is the CI gate)
+	./mac/check
+
+smoke: mac/aeasy-server ## run the end-to-end smoke test (needs Screen Recording granted)
+	python3 test/smoke.py
 
 install: ## build everything + install the `aeasy` CLI (alias `aez`)
 	./install.sh
@@ -48,5 +60,5 @@ status: ## show cable/server/app status
 	$(BIN)/aeasy status
 
 clean: ## remove build artifacts
-	rm -f mac/aeasy-server mac/aeasy-config mac/aeasy-tray
+	rm -f mac/aeasy-server mac/aeasy-config mac/aeasy-tray mac/check mac/check
 	rm -rf android/app/build android/.gradle android/build
