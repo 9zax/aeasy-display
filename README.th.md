@@ -57,6 +57,15 @@ flowchart LR
 
 ## ติดตั้ง
 
+ผ่าน Homebrew:
+
+```sh
+brew install 9zax/tap/aeasy-display
+aeasy install-app     # ติดตั้งแอป viewer (แนบมากับ formula) ลงมือถือที่เสียบสายอยู่
+```
+
+หรือ build จาก source:
+
 ```sh
 git clone https://github.com/9zax/aeasy-display.git
 cd aeasy-display

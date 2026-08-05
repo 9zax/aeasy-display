@@ -57,6 +57,15 @@ flowchart LR
 
 ## Install
 
+Via Homebrew:
+
+```sh
+brew install 9zax/tap/aeasy-display
+aeasy install-app     # push the bundled viewer APK to the plugged-in phone
+```
+
+Or from source:
+
 ```sh
 git clone https://github.com/9zax/aeasy-display.git
 cd aeasy-display
