@@ -12,7 +12,11 @@ APP=dev.ctz.usbdisplay
 plugged() { [[ "$(adb get-state 2>/dev/null)" == "device" ]] }
 warn_unplugged() { echo "⚠️  No phone plugged in (USB-C) — connect the cable and try again" >&2 }
 
-phone_rotation() { adb shell dumpsys display 2>/dev/null | grep -oEm1 'rotation [0-3]' | grep -oE '[0-3]' | head -1; }
+phone_rotation() {  # logical rotation; 'rotation N' alone can match the physical panel's (always 0)
+  local d=$(adb shell dumpsys display 2>/dev/null)
+  local r=$(echo "$d" | grep -oEm1 'mCurrentOrientation=[0-3]' | grep -oE '[0-3]')
+  [[ -n "$r" ]] && echo "$r" || echo "$d" | grep -oEm1 'rotation [0-3]' | grep -oE '[0-3]' | head -1
+}
 
 phone_dims() {  # echoes "W H" matching current phone rotation
   local size=$(adb shell wm size | head -1 | awk '{print $3}')   # e.g. 720x1650
@@ -47,6 +51,9 @@ watch_loop() {
           server_start
         fi
       fi
+    else
+      # cable unplugged → tear down the virtual display until it's back
+      pgrep -qf aeasy-server && pkill -f aeasy-server
     fi
     sleep 2
   done
@@ -59,6 +66,7 @@ case "${1:-start}" in
     sleep 1
     app_open
     pgrep -qf "aeasy _watch" || (nohup zsh "$0" _watch >/dev/null 2>&1 &!)
+    pgrep -qf aeasy-tray || ("$SHARE/aeasy-tray" >/dev/null 2>&1 &!)
     echo "✅ Running — plug, unplug, or rotate freely (stop: aeasy stop)"
     ;;
   stop)

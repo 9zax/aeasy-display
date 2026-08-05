@@ -10,6 +10,10 @@
 
 ![Platform](https://img.shields.io/badge/macOS-13%2B-blue) ![Android](https://img.shields.io/badge/Android-8%2B-green) ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
+<p align="center">
+  <img src="demo.jpg" width="720" alt="ตัวอย่างการใช้งาน AEasy Display — มือถือ Android เป็นจอที่สองของ Mac">
+</p>
+
 เสียบสาย → มือถือกลายเป็นจอ macOS จริง ๆ ลากหน้าต่างไปวางได้เลย หมุนมือถือแล้วจอหมุนตาม หรือจะ mirror หน้าต่างแอปเดียวก็ได้ ทุกอย่างสตรีมเป็น H.264 เข้ารหัสด้วยฮาร์ดแวร์ผ่านสาย USB ด้วย `adb reverse` — ไม่ยุ่งกับเครือข่ายเลย ใช้นอกบ้านได้ และไม่แย่ง Wi-Fi
 
 ```

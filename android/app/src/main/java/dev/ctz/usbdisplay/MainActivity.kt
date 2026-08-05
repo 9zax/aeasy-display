@@ -25,6 +25,8 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     private lateinit var surfaceView: SurfaceView
     @Volatile private var running = false
     private var worker: Thread? = null
+    private var videoW = 0
+    private var videoH = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,6 +41,10 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER))
         setContentView(root)
         surfaceView.holder.addCallback(this)
+        // Rotation keeps the activity alive (configChanges), so re-fit whenever the root resizes.
+        root.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, orr, ob ->
+            if (r - l != orr - ol || b - t != ob - ot) applyFit()
+        }
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
@@ -123,14 +129,18 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     }
 
     private fun fitSurface(fmt: MediaFormat) {
-        val vw = fmt.getInteger(MediaFormat.KEY_WIDTH)
-        val vh = fmt.getInteger(MediaFormat.KEY_HEIGHT)
-        runOnUiThread {
-            val parent = surfaceView.parent as FrameLayout
-            val scale = minOf(parent.width.toFloat() / vw, parent.height.toFloat() / vh)
-            surfaceView.layoutParams = FrameLayout.LayoutParams(
-                (vw * scale).toInt(), (vh * scale).toInt(), Gravity.CENTER)
-        }
+        videoW = fmt.getInteger(MediaFormat.KEY_WIDTH)
+        videoH = fmt.getInteger(MediaFormat.KEY_HEIGHT)
+        runOnUiThread { applyFit() }
+    }
+
+    private fun applyFit() {
+        if (videoW == 0 || videoH == 0) return
+        val parent = surfaceView.parent as FrameLayout
+        if (parent.width == 0 || parent.height == 0) return
+        val scale = minOf(parent.width.toFloat() / videoW, parent.height.toFloat() / videoH)
+        surfaceView.layoutParams = FrameLayout.LayoutParams(
+            (videoW * scale).toInt(), (videoH * scale).toInt(), Gravity.CENTER)
     }
 }
 

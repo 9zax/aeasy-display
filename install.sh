@@ -8,9 +8,11 @@ echo "▸ building mac server..."
 (cd "$DIR/mac" && swiftc -O -import-objc-header virtual-display.h -o aeasy-server AEasyServer.swift)
 echo "▸ building config app..."
 (cd "$DIR/mac" && swiftc -O -o aeasy-config AEasyConfig.swift)
+echo "▸ building menu bar app..."
+(cd "$DIR/mac" && swiftc -O -o aeasy-tray AEasyTray.swift)
 
 mkdir -p "$SHARE" "$HOME/.local/bin"
-cp "$DIR/mac/aeasy-server" "$DIR/mac/aeasy-config" "$SHARE/"
+cp "$DIR/mac/aeasy-server" "$DIR/mac/aeasy-config" "$DIR/mac/aeasy-tray" "$DIR/logo.svg" "$SHARE/"
 APK="$DIR/android/app/build/outputs/apk/debug/app-debug.apk"
 [[ -f "$APK" ]] && cp "$APK" "$SHARE/"
 cp "$DIR/bin/aeasy" "$HOME/.local/bin/aeasy"

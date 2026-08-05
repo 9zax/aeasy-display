@@ -10,6 +10,10 @@
 
 ![Platform](https://img.shields.io/badge/macOS-13%2B-blue) ![Android](https://img.shields.io/badge/Android-8%2B-green) ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
+<p align="center">
+  <img src="demo.jpg" width="720" alt="AEasy Display demo — Android phone as a second display for a Mac">
+</p>
+
 Plug in the cable → your phone becomes a real macOS display. Drag windows to it, rotate the phone and the screen follows, or mirror a single app window. Everything streams hardware-encoded H.264 through the USB cable via `adb reverse` — zero network involved, so it works on the go and never fights your Wi-Fi.
 
 ```

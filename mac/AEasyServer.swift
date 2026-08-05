@@ -13,6 +13,11 @@ import Network
 
 let PORT: UInt16 = 7355
 
+// connect to WindowServer up front — SCContentFilter(desktopIndependentWindow:) asserts
+// (CGS_REQUIRE_INIT) in a headless process without it; display mode only survived because
+// CGVirtualDisplay happened to open the connection first
+_ = NSApplication.shared
+
 // tunables live in ~/.local/share/aeasy/config (key=value), edited by the config GUI
 let shareDir = NSString(string: "~/.local/share/aeasy").expandingTildeInPath
 var _conf: [String: String] = [:]

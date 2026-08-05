@@ -14,13 +14,16 @@ help: ## show this help
 	@echo "AEasy Display — targets:"
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-13s %s\n", $$1, $$2}'
 
-build: mac/aeasy-server mac/aeasy-config ## build the macOS binaries
+build: mac/aeasy-server mac/aeasy-config mac/aeasy-tray ## build the macOS binaries
 
 mac/aeasy-server: mac/AEasyServer.swift mac/virtual-display.h
 	cd mac && swiftc -O -import-objc-header virtual-display.h -o aeasy-server AEasyServer.swift
 
 mac/aeasy-config: mac/AEasyConfig.swift
 	cd mac && swiftc -O -o aeasy-config AEasyConfig.swift
+
+mac/aeasy-tray: mac/AEasyTray.swift
+	cd mac && swiftc -O -o aeasy-tray AEasyTray.swift
 
 apk: ## build the Android viewer app (needs Android SDK)
 	cd android && $(GRADLE) :app:assembleDebug
@@ -45,5 +48,5 @@ status: ## show cable/server/app status
 	$(BIN)/aeasy status
 
 clean: ## remove build artifacts
-	rm -f mac/aeasy-server mac/aeasy-config
+	rm -f mac/aeasy-server mac/aeasy-config mac/aeasy-tray
 	rm -rf android/app/build android/.gradle android/build

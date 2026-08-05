@@ -5,3 +5,4 @@ android/local.properties
 mac/aeasy-server
 mac/aeasy-config
 .DS_Store
+mac/aeasy-tray
