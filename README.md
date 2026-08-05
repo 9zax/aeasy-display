@@ -6,15 +6,19 @@
 
 <p align="center"><b>English</b> · <a href="README.th.md">ภาษาไทย</a></p>
 
-**Turn your Android phone into a touchscreen second display for your Mac — over a USB-C cable or Wi-Fi. No accounts, no paid apps.**
+**Turn your Android phones and iPhones into touchscreen second displays for your Mac — up to 3 at once, over a USB-C cable or Wi-Fi. No accounts, no paid apps.**
 
 ![Platform](https://img.shields.io/badge/macOS-13%2B-blue) ![Android](https://img.shields.io/badge/Android-8%2B-green) ![License](https://img.shields.io/badge/license-MIT-lightgrey) [![Release](https://img.shields.io/github/v/release/9zax/aeasy-display)](https://github.com/9zax/aeasy-display/releases/latest)
+
+<p align="center">
+  <img src="docs/cover-multi-en.png" width="720" alt="AEasy Display — three old phones as three real displays for a Mac">
+</p>
 
 <p align="center">
   <img src="docs/demo.jpg" width="720" alt="AEasy Display demo — Android phone as a second display for a Mac">
 </p>
 
-Plug in the cable → your phone becomes a real macOS display. Drag windows to it, **touch the screen** to click and drag them right on the phone, rotate it and the display follows, or mirror a single app window. Everything streams hardware-encoded H.264/HEVC via `adb reverse` — over USB by default (zero network, works on the go), or cable-free with `aeasy wifi`.
+Plug in the cable → your phone becomes a real macOS display. Drag windows to it, **touch the screen** to click and drag them right on the phone, rotate it and the display follows, or mirror a single app window. Everything streams hardware-encoded H.264/HEVC via `adb reverse` — over USB by default (zero network, works on the go), or cable-free with `aeasy wifi`. Add up to **3 devices** (`aeasy device add`) and each gets its own independent display.
 
 Full feature list: [FEATURES.md](FEATURES.md). How does it stack up against scrcpy, Deskreen, Weylus, and friends? See [COMPARISON.md](COMPARISON.md).
 
@@ -43,7 +47,7 @@ flowchart LR
     end
 ```
 
-- **Mac side** — a single Swift binary creates a virtual display sized to your phone's panel (pinned to a crisp Retina mode), captures it with ScreenCaptureKit, encodes H.264 with the hardware encoder, and serves the stream on TCP `:7355`. Slow clients get frames dropped instead of building up latency.
+- **Mac side** — a single Swift binary creates a virtual display sized to your phone's panel (pinned to a crisp Retina mode), captures it with ScreenCaptureKit, encodes H.264 with the hardware encoder, and serves the stream on its own TCP port (`:7355` for the first device — each added device gets its own server process and port). Slow clients get frames dropped instead of building up latency.
 - **Transport** — `adb reverse` tunnels the phone's `localhost:7355` to the Mac through the USB cable. No custom USB drivers, no network.
 - **Android side** — a tiny app (no permissions except `INTERNET`) connects, hardware-decodes, and renders fullscreen. It reconnects automatically whenever the stream restarts.
 - **The `aeasy` CLI** — watches the cable: plug in and everything starts; rotate the phone and the virtual display flips with it.
@@ -112,20 +116,37 @@ aeasy start     # start everything (aliased as `aez`)
 
 | Command | What it does |
 |---|---|
-| `aeasy start` | Create the virtual display, launch the phone app, and watch the cable. Warns in the terminal if no phone is plugged in. |
-| `aeasy stop` | Stop the server and the cable watcher. |
-| `aeasy status` | Cable / server / phone-app status plus current config. |
-| `aeasy app` | Launch the viewer app on the phone (warns if unplugged). |
-| `aeasy mirror Safari` | Mirror **one app window** instead of extending — great for keeping an eye on a single app. |
-| `aeasy screen` | Back to extended-display mode. |
-| `aeasy sources display,window:Safari` | Show **up to 3 sources at once** as panes on the phone. No argument prints the current set. |
-| `aeasy config` | Open the settings GUI (frame rate, bitrate, resolution, sources, pane layout). |
-| `aeasy tune` | One-shot low-latency preset (15fps / 60% resolution) for slower phones. |
-| `aeasy wifi` | Switch to **wireless mode** — plug the cable once to enable, then unplug and roam. |
-| `aeasy usb` | Back to USB mode. |
-| `aeasy restart` | Restart the virtual display. |
-| `aeasy install-app` | Install the bundled APK onto the phone. |
-| `aeasy log` | Tail the server log. |
+| `aeasy start` | Start every added device's virtual display, launch the phone app, and watch the cable. |
+| `aeasy stop` | Stop all servers and the cable watcher. |
+| `aeasy status` | Every device's cable / server / phone-app status plus current config. |
+| `aeasy device list` | Every device the Mac can see — added or not, app installed or not. |
+| `aeasy device add <id>` | Add a device (max 3). Devices already streaming are not interrupted. |
+| `aeasy device rm <id\|slot>` | Remove one (its settings are kept for when you add it back). |
+| `aeasy device input <id\|slot>` | Pick which device controls the Mac cursor (one at a time). |
+| `aeasy app [id]` | Launch the viewer app on the phone (iOS can only be opened on the device). |
+| `aeasy mirror Safari [id]` | Mirror **one app window** instead of extending — great for keeping an eye on a single app. |
+| `aeasy screen [id]` | Back to extended-display mode. |
+| `aeasy sources [id] display,window:Safari` | Show **up to 3 sources at once** as panes on the phone. No argument prints the current set. |
+| `aeasy config [id]` | Open that device's settings GUI (frame rate, bitrate, resolution, sources, pane layout). |
+| `aeasy tune` | One-shot low-latency preset (15fps / 60% resolution) on every device. |
+| `aeasy wifi [id]` | Switch to **wireless mode** — plug the cable once to enable, then unplug and roam. |
+| `aeasy usb [id]` | Back to USB mode. |
+| `aeasy restart [id]` | Restart the virtual display (no id = every device). |
+| `aeasy install-app [id]` | Android: install the bundled APK. iOS: open Xcode to sign with your own free Apple ID. |
+| `aeasy log [id]` | Tail the server log(s). |
+| `aeasy uninstall` | Remove aeasy from this Mac (and the phone app on every added device). |
+
+Commands taking `[id]` accept a serial or a slot number; with one device (or none named) they act on the sensible default.
+
+### Several devices at once
+
+```sh
+aeasy device list          # what the Mac can see
+aeasy device add R58M1234  # add it — max 3, each its own extended display
+aeasy device input 1       # this one drives the Mac cursor now
+```
+
+Each device gets its own server process, port, virtual display, settings, and pane layout, so macOS remembers each one's resolution and arrangement. Adding or removing a device never drops another device's stream, and a device that crashes is relaunched with backoff without touching the others. Only discovery is deliberate: devices appear via `adb` / `idevice_id` only — no network scan.
 
 ### Several sources at once
 
@@ -175,7 +196,7 @@ If the app has several windows, the largest on-screen one is used. If no matchin
 
 ## Configuration
 
-`aeasy config` opens a small GUI, or edit `~/.local/share/aeasy/config` by hand:
+`aeasy config [id]` opens a small GUI per device, or edit `~/.local/share/aeasy/dev/<slot>/config` by hand:
 
 <p align="center">
   <img src="docs/setting.png" width="420" alt="AEasy Display settings window — frame rate, bitrate, resolution, codec, sources, and a live pane-layout editor">
@@ -188,9 +209,10 @@ The window covers everything in the table below — frame rate, bitrate, resolut
 | `FPS` | `20` | Capture/encode frame rate (10–30). Lower = less latency on slow phones. |
 | `BITRATE` | `2000000` | Video bitrate in bps. |
 | `SCALE` | `80` | Encode resolution as % of the phone panel. Lower = lighter decode. |
-| `SOURCES` | `display` | Up to 3, comma-separated: `display` and/or `window:<AppName>`. Set by `aeasy sources`/`mirror`/`screen`. The first entry is the main pane, and `display` is always moved first. |
+| `SOURCES` | `display` | Up to 3, comma-separated: `display`, `window:<AppName>`, `camera:<Name>`. Set by `aeasy sources`/`mirror`/`screen`. The first entry is the main pane, and `display` is always moved first. |
 | `CODEC` | `h264` | `h264` or `hevc`. HEVC looks better at the same bitrate; if your phone can't decode it (black screen), set back to `h264`. |
-| `WIFI_ADDR` | – | Set by `aeasy wifi`, cleared by `aeasy usb` — don't edit by hand. |
+| `PANEL` | – | `<W> <H>` locks the virtual display size; absent = auto-size from the phone panel. Set by the resolution lock in `aeasy config`. |
+| `INPUT` | – | `1` = this device controls the Mac cursor. Set by `aeasy device input` — don't edit by hand. |
 
 Bigger text: System Settings → Displays → **AEasy Display** and pick a lower "looks like" resolution.
 
@@ -198,6 +220,7 @@ Bigger text: System Settings → Displays → **AEasy Display** and pick a lower
 
 | Symptom | Fix |
 |---|---|
+| "No devices added yet" | `aeasy device list` to see what the Mac can see, then `aeasy device add <id>`. |
 | "no phone plugged in" warning | Check the cable, and that the phone shows up in `adb devices` (accept the USB-debugging prompt). |
 | Black screen on the phone | `aeasy restart`; make sure Screen Recording permission is granted. |
 | Laggy | Run `aeasy tune` (or lower `FPS`/`SCALE` in `aeasy config`). When >25% of frames get dropped, AEasy notifies you automatically with the recommended fix. |
