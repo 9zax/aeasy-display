@@ -264,6 +264,14 @@ relay_ensure() {
       || socat TCP:127.0.0.1:$l TCP:127.0.0.1:$AEASY_PORT >/dev/null 2>&1 &!
   fi
 }
+# Reachability check that never dials the device's :7355 while a relay is streaming:
+# the app keeps ONE connection and a bare `nc -z` probe displaces it — the stream dies,
+# the viewer flashes "Waiting for Mac…", and the next tick reconnects, every 2 s.
+# A live relay socat IS the proof the device is up (socat exits when the pipe dies).
+ios_wifi_up() {   # ios_wifi_up <addr>
+  pgrep -qf "socat TCP:$1:7355 TCP:127.0.0.1:$AEASY_PORT" && return 0
+  nc -z -w1 "$1" 7355 >/dev/null 2>&1
+}
 relay_kill() {
   local a=$(conf IOS_ADDR) l=$(( AEASY_PORT + 1 ))
   pkill -f "iproxy $l:7355 -u $AEASY_SERIAL" 2>/dev/null
@@ -515,7 +523,7 @@ watch_tick() {   # watch_tick <newline-separated online ids>
   backoff_tick
   if print -r -- "$online" | grep -qxF -- "$AEASY_SERIAL"; then
     up=1
-  elif [[ "$plat" == ios && -n "$a" ]] && nc -z -w1 "$a" 7355 >/dev/null 2>&1; then
+  elif [[ "$plat" == ios && -n "$a" ]] && ios_wifi_up "$a"; then
     up=1
   elif [[ "$AEASY_SERIAL" == *:* ]]; then
     command adb connect "$AEASY_SERIAL" >/dev/null 2>&1   # wireless: try to reconnect first
@@ -591,8 +599,8 @@ status_slot() {
     ios)
       local a=$(conf IOS_ADDR) l=$(( AEASY_PORT + 1 ))
       if [[ -n "$a" ]]; then
-        nc -z -w1 "$a" 7355 >/dev/null 2>&1 && print -r -- "   📶 Wireless (iOS): reachable $a" \
-                                            || print -r -- "   📶 Wireless (iOS): unreachable ($a)"
+        ios_wifi_up "$a" && print -r -- "   📶 Wireless (iOS): reachable $a" \
+                         || print -r -- "   📶 Wireless (iOS): unreachable ($a)"
       elif [[ -n "$(ideviceinfo -u "$AEASY_SERIAL" -k DeviceName 2>/dev/null)" ]]; then
         print -r -- "   🔌 Cable (iOS): connected"
       else

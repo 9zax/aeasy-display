@@ -53,8 +53,13 @@ final class StreamListener {
                 DispatchQueue.main.async { self?.onState?(true) }
                 self?.recv(c)
             case .failed, .cancelled:
-                DispatchQueue.main.async { self?.onState?(false) }
-                self?.queue.async { if self?.conn === c { self?.conn = nil } }
+                // only the CURRENT connection's death means disconnected — a conn
+                // cancelled because accept() replaced it must not flash "Waiting"
+                self?.queue.async {
+                    guard let self, self.conn === c else { return }
+                    self.conn = nil
+                    DispatchQueue.main.async { self.onState?(false) }
+                }
             default: break
             }
         }
