@@ -11,7 +11,7 @@ export ANDROID_HOME := /opt/homebrew/share/android-commandlinetools
 endif
 
 .DEFAULT_GOAL := help
-.PHONY: help build apk check smoke install install-app run start stop status clean
+.PHONY: help build apk check smoke install install-app uninstall run start stop status clean
 
 help: ## show this help
 	@echo "AEasy Display — targets:"
@@ -48,6 +48,9 @@ install: ## build everything + install the `aeasy` CLI (alias `aez`)
 
 install-app: ## install the APK onto the plugged-in phone
 	$(BIN)/aeasy install-app
+
+uninstall: ## remove the aeasy CLI + all installed files
+	$(BIN)/aeasy uninstall
 
 run: install ## rebuild, reinstall, then (re)start the stream
 	$(BIN)/aeasy restart || $(BIN)/aeasy start

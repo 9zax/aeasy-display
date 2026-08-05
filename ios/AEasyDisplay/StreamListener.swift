@@ -74,6 +74,28 @@ final class StreamListener {
         }
     }
 
+    /// A pure listener never trips iOS's Local Network prompt, so the Mac's inbound
+    /// connect is silently refused until the user finds the toggle. One outbound UDP
+    /// broadcast is the documented trick to force the dialog on first launch.
+    static func triggerLocalNetworkPrompt() {
+        let sock = socket(AF_INET, SOCK_DGRAM, 0)
+        guard sock >= 0 else { return }
+        var yes: Int32 = 1
+        setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &yes, socklen_t(MemoryLayout<Int32>.size))
+        var addr = sockaddr_in()
+        addr.sin_family = sa_family_t(AF_INET)
+        addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        addr.sin_port = UInt16(7355).bigEndian
+        addr.sin_addr.s_addr = INADDR_BROADCAST
+        let payload = [UInt8]("aeasy".utf8)
+        withUnsafePointer(to: &addr) { p in
+            p.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
+                _ = sendto(sock, payload, payload.count, 0, sa, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+        close(sock)
+    }
+
     /// The device's Wi-Fi IP (en0), for the on-screen label — Wi-Fi mode is
     /// `aeasy wifi <this>` on the Mac; there is no discovery protocol on purpose.
     static func wifiAddress() -> String? {

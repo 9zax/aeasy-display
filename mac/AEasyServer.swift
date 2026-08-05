@@ -12,6 +12,7 @@
 
 import Foundation
 import AppKit
+import AVFoundation
 import ScreenCaptureKit
 import VideoToolbox
 import CoreMedia
@@ -387,6 +388,8 @@ final class Source {
     var displayID: CGDirectDisplayID = 0
     var windowID: CGWindowID = 0
     var windowPID: pid_t = 0
+    var camSession: AVCaptureSession?
+    var camOutput: CameraOutput?
 
     var isDisplay: Bool { id == "display" }
     var isPrimary: Bool { index == 0 }
@@ -452,6 +455,8 @@ final class Source {
         alive = false
         stream?.stopCapture { _ in }
         stream = nil
+        camSession?.stopRunning()
+        camSession = nil
         sampleQueue.async { [weak self] in self?.lastPB = nil }
     }
 }
@@ -473,6 +478,20 @@ final class StreamOutput: NSObject, SCStreamOutput, SCStreamDelegate {
     func stream(_ stream: SCStream, didStopWithError error: Error) {
         NSLog("source \(source.id) stopped: \(error.localizedDescription)")
         server?.dropSource(source.index)
+    }
+}
+
+// camera frames enter the same per-source pipeline as ScreenCaptureKit frames:
+// lastPB + encode on sampleQueue (the delegate callback runs on that queue)
+final class CameraOutput: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
+    let source: Source
+    init(source: Source) { self.source = source }
+
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer,
+                       from connection: AVCaptureConnection) {
+        guard sampleBuffer.isValid, let pb = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        source.lastPB = pb
+        source.encoder.encode(pb, force: false)
     }
 }
 
@@ -1005,6 +1024,52 @@ func makeStream(for src: Source, filter: SCContentFilter, width: Int, height: In
     return stream
 }
 
+func makeCameraStream(for src: Source, device: AVCaptureDevice) throws {
+    let session = AVCaptureSession()
+    // ponytail: fixed 720p (fallback native) — good enough for a pane; pick per-box modes if bandwidth bites
+    if session.canSetSessionPreset(.hd1280x720) { session.sessionPreset = .hd1280x720 }
+    let input = try AVCaptureDeviceInput(device: device)
+    guard session.canAddInput(input) else {
+        throw NSError(domain: "aeasy", code: 1,
+                      userInfo: [NSLocalizedDescriptionKey: "cannot open camera '\(device.localizedName)'"])
+    }
+    session.addInput(input)
+
+    let out = AVCaptureVideoDataOutput()
+    out.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+    out.alwaysDiscardsLateVideoFrames = true    // encoder backlog must drop frames, not queue them
+    let delegate = CameraOutput(source: src)
+    out.setSampleBufferDelegate(delegate, queue: src.sampleQueue)
+    guard session.canAddOutput(out) else {
+        throw NSError(domain: "aeasy", code: 1,
+                      userInfo: [NSLocalizedDescriptionKey: "cannot read camera '\(device.localizedName)'"])
+    }
+    session.addOutput(out)
+
+    // cap the device at the configured FPS where the format allows it
+    if let range = device.activeFormat.videoSupportedFrameRateRanges.first,
+       (try? device.lockForConfiguration()) != nil {
+        let fps = min(Double(src.fps), range.maxFrameRate)
+        device.activeVideoMinFrameDuration = CMTime(value: 1, timescale: Int32(fps))
+        device.unlockForConfiguration()
+    }
+
+    let dims = CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription)
+    src.encW = Int(dims.width)
+    src.encH = Int(dims.height)
+
+    src.encoder.onHeader = { [weak src] h in
+        guard let src else { return }
+        server?.setHeader(h, src.index)
+    }
+    src.encoder.onEncoded = { [weak src] data, isKey in
+        guard let src else { return }
+        server?.broadcast(data, from: src.index, droppable: !isKey)
+    }
+    src.camOutput = delegate
+    src.camSession = session
+}
+
 Task {
     do {
         // the virtual display has to exist before SCShareableContent can see it
@@ -1037,13 +1102,13 @@ Task {
 
         // resolve first, build second: a source that cannot be found is dropped, and
         // indices have to stay contiguous or the budget split and the primary would shift
-        var resolved: [(id: String, display: SCDisplay?, window: SCWindow?)] = []
+        var resolved: [(id: String, display: SCDisplay?, window: SCWindow?, camera: AVCaptureDevice?)] = []
         for id in SOURCE_IDS {
             if id == "display" {
                 guard let d = displays.displays.first(where: { $0.displayID == vdispID }) else {
                     NSLog("virtual display missing from the capture list — skipping"); continue
                 }
-                resolved.append((id, d, nil))
+                resolved.append((id, d, nil, nil))
             } else if id.hasPrefix("window:") {
                 let app = String(id.dropFirst("window:".count))
                 guard let win = windows.windows
@@ -1053,7 +1118,21 @@ Task {
                     NSLog("window of '\(app)' not found — skipping. running apps: \(names.joined(separator: ", "))")
                     continue
                 }
-                resolved.append((id, nil, win))
+                resolved.append((id, nil, win, nil))
+            } else if id.hasPrefix("camera:") {
+                let name = String(id.dropFirst("camera:".count))
+                guard await AVCaptureDevice.requestAccess(for: .video) else {
+                    NSLog("camera access denied — System Settings > Privacy & Security > Camera > aeasy-server")
+                    continue
+                }
+                let ds = AVCaptureDevice.DiscoverySession(
+                    deviceTypes: [.builtInWideAngleCamera, .externalUnknown],
+                    mediaType: .video, position: .unspecified)
+                guard let dev = ds.devices.first(where: { $0.localizedName.localizedCaseInsensitiveContains(name) }) else {
+                    NSLog("camera '\(name)' not found — connected: \(ds.devices.map(\.localizedName).joined(separator: ", "))")
+                    continue
+                }
+                resolved.append((id, nil, nil, dev))
             } else {
                 NSLog("unknown source '\(id)' — skipping")
             }
@@ -1075,7 +1154,10 @@ Task {
                     CGDisplaySetDisplayMode(vdispID, m, nil)
                     NSLog("mode pinned \(m.width)x\(m.height) (backing \(m.pixelWidth)x\(m.pixelHeight))")
                 }
-                let (w, h) = fitEven(Double(pxW), Double(pxH), into: box.0, box.1)
+                // iOS reports half-native points (Protocol.reportedSize), so the panel has 2x
+                // the pixels — capture the retina backing or the iPad upscales it blurry
+                let mult = IOS_MODE ? 2.0 : 1.0
+                let (w, h) = fitEven(Double(pxW) * mult, Double(pxH) * mult, into: box.0 * mult, box.1 * mult)
                 _ = try makeStream(for: src, filter: SCContentFilter(display: display, excludingWindows: []),
                                    width: w, height: h, scalesToFit: false)
             } else if let win = entry.window {
@@ -1085,6 +1167,9 @@ Task {
                 _ = try makeStream(for: src, filter: SCContentFilter(desktopIndependentWindow: win),
                                    width: w, height: h, scalesToFit: true)
                 NSLog("capturing window '\(win.title ?? "?")' of \(win.owningApplication?.applicationName ?? "?")")
+            } else if let cam = entry.camera {
+                try makeCameraStream(for: src, device: cam)
+                NSLog("capturing camera '\(cam.localizedName)'")
             }
             built.append(src)
         }
@@ -1107,6 +1192,7 @@ Task {
 
         for src in sources {
             try await src.stream?.startCapture()
+            src.camSession?.startRunning()
         }
         NSLog("capture started for \(sources.count) source(s)")
     } catch {

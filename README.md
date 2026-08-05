@@ -16,7 +16,7 @@
 
 Plug in the cable → your phone becomes a real macOS display. Drag windows to it, **touch the screen** to click and drag them right on the phone, rotate it and the display follows, or mirror a single app window. Everything streams hardware-encoded H.264/HEVC via `adb reverse` — over USB by default (zero network, works on the go), or cable-free with `aeasy wifi`.
 
-How does it stack up against scrcpy, Deskreen, Weylus, and friends? See [COMPARISON.md](COMPARISON.md).
+Full feature list: [FEATURES.md](FEATURES.md). How does it stack up against scrcpy, Deskreen, Weylus, and friends? See [COMPARISON.md](COMPARISON.md).
 
 ```
 ┌─────────────────────┐         USB-C cable          ┌──────────────┐
@@ -47,8 +47,13 @@ flowchart LR
 - **Transport** — `adb reverse` tunnels the phone's `localhost:7355` to the Mac through the USB cable. No custom USB drivers, no network.
 - **Android side** — a tiny app (no permissions except `INTERNET`) connects, hardware-decodes, and renders fullscreen. It reconnects automatically whenever the stream restarts.
 - **The `aeasy` CLI** — watches the cable: plug in and everything starts; rotate the phone and the virtual display flips with it.
+- **The menu bar tray** — started automatically with `aeasy start`: shows live status and gives one-click Start/Restart, Stop, Settings, and the feature list.
 
 ## iPhone & iPad (beta)
+
+<p align="center">
+  <img src="docs/ios-demo.gif" width="720" alt="AEasy Display iOS demo — iPhone as a second display for a Mac">
+</p>
 
 The iOS viewer lives in [`ios/`](ios/) and streams the same way — but Apple's platform changes three things, so read this first:
 
@@ -200,10 +205,13 @@ aeasy-display/
 ├── install.sh                  # build + install (used by `make install`)
 ├── bin/aeasy                   # the CLI (zsh)
 ├── mac/
-│   ├── AEasyServer.swift  # virtual display + capture + encode + TCP server
-│   ├── AEasyConfig.swift  # settings GUI
+│   ├── AEasyServer.swift       # virtual display + capture + encode + TCP server
+│   ├── AEasyConfig.swift       # settings GUI
+│   ├── AEasyTray.swift         # menu bar tray icon
+│   ├── Protocol.swift          # shared stream-packet parser
 │   └── virtual-display.h       # private CGVirtualDisplay interface
-└── android/                    # viewer app (Kotlin, ~200 lines)
+├── android/                    # viewer app (Kotlin)
+└── ios/                        # iPhone/iPad viewer app (Swift, beta)
 ```
 
 ## Limitations

@@ -48,6 +48,9 @@ final class ViewController: UIViewController {
         status.font = .monospacedSystemFont(ofSize: 15, weight: .regular)
         status.numberOfLines = 0
         status.textAlignment = .center
+        // only visible while disconnected, so the tap can't collide with stream touches
+        status.isUserInteractionEnabled = true
+        status.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openSettings)))
         view.addSubview(status)
         NSLayoutConstraint.activate([
             status.centerXAnchor.constraint(equalTo: view.centerXAnchor),
@@ -94,11 +97,17 @@ final class ViewController: UIViewController {
         }
 
         listener.start()
+        StreamListener.triggerLocalNetworkPrompt()
     }
 
     private func showWaiting() {
         let ip = StreamListener.wifiAddress().map { "\nWi-Fi: aeasy wifi \($0)" } ?? ""
-        show("Waiting for Mac…\nUSB: plug in and run `aeasy start`\(ip)")
+        show("Waiting for Mac…\nUSB: plug in and run `aeasy start`\(ip)\n\nNot connecting? Tap here → allow Local Network")
+    }
+
+    @objc private func openSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
     }
     private func show(_ text: String) { status.text = text; status.isHidden = false }
 

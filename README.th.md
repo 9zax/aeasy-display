@@ -26,7 +26,7 @@
 └─────────────────────┘                              └──────────────┘
 ```
 
-เทียบกับ scrcpy, Deskreen, Weylus และเจ้าอื่น ๆ เป็นยังไง? ดู [COMPARISON.th.md](COMPARISON.th.md)
+ดูรายการฟีเจอร์ทั้งหมดได้ที่ [FEATURES.th.md](FEATURES.th.md) และเทียบกับ scrcpy, Deskreen, Weylus และเจ้าอื่น ๆ เป็นยังไง? ดู [COMPARISON.th.md](COMPARISON.th.md)
 
 ## ทำงานยังไง
 
@@ -47,8 +47,13 @@ flowchart LR
 - **การส่งข้อมูล** — `adb reverse` ทำอุโมงค์จาก `localhost:7355` บนมือถือมาที่ Mac ผ่านสาย USB ไม่ต้องใช้ไดรเวอร์ USB พิเศษ ไม่ใช้เครือข่าย
 - **ฝั่ง Android** — แอปเล็ก ๆ (ขอสิทธิ์แค่ `INTERNET`) เชื่อมต่อ ถอดรหัสด้วยฮาร์ดแวร์ แล้วแสดงเต็มจอ พร้อมเชื่อมต่อใหม่อัตโนมัติทุกครั้งที่สตรีมรีสตาร์ต
 - **CLI `aeasy`** — คอยเฝ้าสาย: เสียบปุ๊บทุกอย่างเริ่มเอง หมุนมือถือแล้ว virtual display พลิกตาม
+- **ไอคอนบน menu bar** — เปิดให้อัตโนมัติพร้อม `aeasy start`: โชว์สถานะสด กดคลิกเดียวเพื่อ Start/Restart, Stop, ตั้งค่า และดูรายการฟีเจอร์
 
 ## iPhone และ iPad (เบต้า)
+
+<p align="center">
+  <img src="docs/ios-demo.gif" width="720" alt="ตัวอย่างการใช้งาน AEasy Display บน iOS — iPhone เป็นจอที่สองของ Mac">
+</p>
 
 แอป viewer ฝั่ง iOS อยู่ใน [`ios/`](ios/) สตรีมแบบเดียวกัน — แต่แพลตฟอร์มของ Apple ทำให้ต่างไป 3 เรื่อง อ่านก่อนใช้:
 
@@ -200,10 +205,13 @@ aeasy-display/
 ├── install.sh                  # build + ติดตั้ง (ใช้โดย `make install`)
 ├── bin/aeasy                   # CLI (zsh)
 ├── mac/
-│   ├── AEasyServer.swift  # virtual display + จับภาพ + เข้ารหัส + TCP server
-│   ├── AEasyConfig.swift  # GUI ตั้งค่า
+│   ├── AEasyServer.swift       # virtual display + จับภาพ + เข้ารหัส + TCP server
+│   ├── AEasyConfig.swift       # GUI ตั้งค่า
+│   ├── AEasyTray.swift         # ไอคอนบน menu bar
+│   ├── Protocol.swift          # ตัวแยกแพ็กเก็ตสตรีม (ใช้ร่วมกัน)
 │   └── virtual-display.h       # อินเทอร์เฟซ CGVirtualDisplay (private API)
-└── android/                    # แอปแสดงผล (Kotlin ~200 บรรทัด)
+├── android/                    # แอปแสดงผล (Kotlin)
+└── ios/                        # แอปแสดงผล iPhone/iPad (Swift, beta)
 ```
 
 ## ข้อจำกัด

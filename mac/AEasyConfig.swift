@@ -3,6 +3,7 @@
 // The pane layout is live: this app connects to the server's control channel on :7355
 // exactly like the phone does, so dragging a pane here moves it on the phone immediately.
 import AppKit
+import AVFoundation
 import Network
 
 let shareDir = NSString(string: ProcessInfo.processInfo.environment["AEASY_DIR"] ?? "~/.local/share/aeasy")
@@ -20,6 +21,13 @@ func loadConf() -> [String: String] {
         }
     }
     return c
+}
+
+// listing names needs no camera permission — only capture does (that prompt is the server's)
+func cameraNames() -> [String] {
+    AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera, .externalUnknown],
+                                     mediaType: .video, position: .unspecified)
+        .devices.map(\.localizedName).sorted()
 }
 
 func runningAppNames() -> [String] {
@@ -170,6 +178,7 @@ final class PaneCanvasView: NSView {
             NSColor.controlAccentColor.setFill()
             CGRect(x: r.maxX - 12, y: r.maxY - 12, width: 12, height: 12).fill()
             let label = p.src.replacingOccurrences(of: "window:", with: "")
+                             .replacingOccurrences(of: "camera:", with: "📷 ")
             let attrs: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: 10),
                 .foregroundColor: NSColor.white,
@@ -252,6 +261,7 @@ final class App: NSObject, NSApplicationDelegate {
 
     private let NONE = "— none —"
     private let DISPLAY = "Extended display"
+    private let CAM = "Camera: "   // visible prefix, doubles as the title↔id discriminator
 
     func applicationDidFinishLaunching(_ n: Notification) {
         let c = loadConf()
@@ -264,17 +274,19 @@ final class App: NSObject, NSApplicationDelegate {
         // MODE/WINDOW_APP are gone: SOURCES is the only thing the server reads now, so a
         // leftover Mode dropdown would silently do nothing
         let apps = runningAppNames()
+        let cams = cameraNames().map { CAM + $0 }
         let current = configuredSources(c)
         for i in 0..<3 {
             let p = NSPopUpButton(frame: .zero, pullsDown: false)
-            p.addItems(withTitles: [NONE, DISPLAY] + apps)
+            p.addItems(withTitles: [NONE, DISPLAY] + cams + apps)
             if i < current.count {
                 let id = current[i]
                 if id == "display" { p.selectItem(withTitle: DISPLAY) }
                 else {
-                    let app = String(id.dropFirst("window:".count))
-                    if p.itemTitles.contains(app) { p.selectItem(withTitle: app) }
-                    else { p.addItem(withTitle: app); p.selectItem(withTitle: app) }
+                    let title = id.hasPrefix("camera:") ? CAM + id.dropFirst("camera:".count)
+                                                        : String(id.dropFirst("window:".count))
+                    if p.itemTitles.contains(title) { p.selectItem(withTitle: title) }
+                    else { p.addItem(withTitle: title); p.selectItem(withTitle: title) }
                 }
             }
             p.target = self
@@ -353,7 +365,9 @@ final class App: NSObject, NSApplicationDelegate {
         var ids: [String] = []
         for p in sourcePicks {
             guard let t = p.titleOfSelectedItem, t != NONE else { continue }
-            let id = t == DISPLAY ? "display" : "window:\(t)"
+            let id = t == DISPLAY ? "display"
+                   : t.hasPrefix(CAM) ? "camera:\(t.dropFirst(CAM.count))"
+                   : "window:\(t)"
             if !ids.contains(id) { ids.append(id) }
         }
         if ids.isEmpty { ids = ["display"] }

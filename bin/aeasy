@@ -248,6 +248,9 @@ case "${1:-start}" in
     true
     ;;
   config|--config)
+    # ponytail: relaunch-to-front — a fresh launch is the only no-permission way to
+    # get an unbundled app's window on top; state lives in the config file anyway
+    pkill -f "$CONFIGAPP" 2>/dev/null
     "$CONFIGAPP" &!
     echo "⚙️  Settings window opened"
     ;;
@@ -310,6 +313,20 @@ case "${1:-start}" in
       adb install -r "$APK" && echo "📱 App installed on the phone"
     fi
     ;;
+  uninstall)
+    echo -n "Remove aeasy from this Mac (and the phone app if plugged in)? [y/N] "
+    read -q REPLY || { echo; echo "cancelled"; exit 1 }
+    echo
+    "$0" stop >/dev/null 2>&1
+    pkill -f aeasy-tray 2>/dev/null
+    plugged && adb uninstall $APP >/dev/null 2>&1 && echo "📱 Phone app removed"
+    rm -rf "$SHARE"
+    rm -f "$HOME/.local/bin/aeasy"
+    # remove the block install.sh appended (marker comment .. alias line)
+    sed -i '' '/^# AEasy Display — Android USB second screen$/,/^alias aez=/d' ~/.zshrc 2>/dev/null
+    [[ "$0" == *Cellar* ]] && echo "   installed via Homebrew — also run: brew uninstall aeasy"
+    echo "🗑  Uninstalled — open a new terminal to drop the PATH/alias"
+    ;;
   log)
     tail -20 "$LOG"
     ;;
@@ -335,6 +352,7 @@ aeasy — ใช้มือถือ Android หรือ iPhone/iPad เป็
   aeasy usb            กลับมาใช้สาย USB
   aeasy restart        รีสตาร์ทจอเสมือน
   aeasy install-app    Android: ติดตั้ง APK / iOS: เปิด Xcode ให้ sign ด้วย Apple ID ตัวเอง (ฟรี)
+  aeasy uninstall      ถอนการติดตั้งทั้งหมดออกจาก Mac (รวมแอปบนมือถือถ้าเสียบสายอยู่)
   aeasy log            ดู log ล่าสุดของเซิร์ฟเวอร์
 
   iOS ต้องมี: brew install libusbmuxd libimobiledevice socat
@@ -358,6 +376,7 @@ aeasy — use an Android phone or iPhone/iPad as a second display for your Mac o
   aeasy usb            switch back to USB mode
   aeasy restart        restart the virtual display
   aeasy install-app    Android: install the APK / iOS: open Xcode to sign with your own free Apple ID
+  aeasy uninstall      remove aeasy from this Mac (and the phone app if plugged in)
   aeasy log            tail the server log
 
   iOS needs: brew install libusbmuxd libimobiledevice socat

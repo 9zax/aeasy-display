@@ -13,6 +13,10 @@
 		AE0001000000000000000004 /* NalScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0002000000000000000004 /* NalScanner.swift */; };
 		AE0001000000000000000005 /* Decoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0002000000000000000005 /* Decoder.swift */; };
 		AE0001000000000000000006 /* Protocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0002000000000000000006 /* Protocol.swift */; };
+		AE0001000000000000000007 /* AppIcon60x60@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = AE0002000000000000000009 /* AppIcon60x60@2x.png */; };
+		AE0001000000000000000008 /* AppIcon60x60@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = AE000200000000000000000A /* AppIcon60x60@3x.png */; };
+		AE0001000000000000000009 /* AppIcon76x76@2x~ipad.png in Resources */ = {isa = PBXBuildFile; fileRef = AE000200000000000000000B /* AppIcon76x76@2x~ipad.png */; };
+		AE000100000000000000000A /* AppIcon83.5x83.5@2x~ipad.png in Resources */ = {isa = PBXBuildFile; fileRef = AE000200000000000000000C /* AppIcon83.5x83.5@2x~ipad.png */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -24,6 +28,10 @@
 		AE0002000000000000000006 /* Protocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Protocol.swift; path = ../../mac/Protocol.swift; sourceTree = "<group>"; };
 		AE0002000000000000000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AE0002000000000000000008 /* AEasyDisplay.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AEasyDisplay.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AE0002000000000000000009 /* AppIcon60x60@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "AppIcon60x60@2x.png"; sourceTree = "<group>"; };
+		AE000200000000000000000A /* AppIcon60x60@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "AppIcon60x60@3x.png"; sourceTree = "<group>"; };
+		AE000200000000000000000B /* AppIcon76x76@2x~ipad.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "AppIcon76x76@2x~ipad.png"; sourceTree = "<group>"; };
+		AE000200000000000000000C /* AppIcon83.5x83.5@2x~ipad.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "AppIcon83.5x83.5@2x~ipad.png"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -55,6 +63,10 @@
 				AE0002000000000000000005 /* Decoder.swift */,
 				AE0002000000000000000006 /* Protocol.swift */,
 				AE0002000000000000000007 /* Info.plist */,
+				AE0002000000000000000009 /* AppIcon60x60@2x.png */,
+				AE000200000000000000000A /* AppIcon60x60@3x.png */,
+				AE000200000000000000000B /* AppIcon76x76@2x~ipad.png */,
+				AE000200000000000000000C /* AppIcon83.5x83.5@2x~ipad.png */,
 			);
 			path = AEasyDisplay;
 			sourceTree = "<group>";
@@ -76,6 +88,7 @@
 			buildPhases = (
 				AE0006000000000000000001 /* Sources */,
 				AE0003000000000000000001 /* Frameworks */,
+				AE000A000000000000000001 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -113,6 +126,20 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AE000A000000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AE0001000000000000000007 /* AppIcon60x60@2x.png in Resources */,
+				AE0001000000000000000008 /* AppIcon60x60@3x.png in Resources */,
+				AE0001000000000000000009 /* AppIcon76x76@2x~ipad.png in Resources */,
+				AE000100000000000000000A /* AppIcon83.5x83.5@2x~ipad.png in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		AE0006000000000000000001 /* Sources */ = {
@@ -170,6 +197,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Q86K5H383T;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AEasyDisplay/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -188,6 +216,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Q86K5H383T;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AEasyDisplay/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
