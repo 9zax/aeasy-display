@@ -8,6 +8,7 @@ APK="$SHARE/app-debug.apk"
 CFG="$SHARE/config"
 LOG="$SHARE/server.log"
 APP=dev.ctz.usbdisplay
+mkdir -p "$SHARE"  # config/log/dims live here; Homebrew installs don't run install.sh
 
 # route every adb call to the wireless device when WIFI_ADDR is set (aeasy wifi)
 adb() {
