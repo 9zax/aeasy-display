@@ -1,5 +1,5 @@
 #!/bin/zsh
-# aeasy — ใช้มือถือ Android เป็นจอเสริม/จอ mirror ของ Mac ผ่านสาย USB-C
+# aeasy — ใช้มือถือ Android/iPhone เป็นจอเสริม/จอ mirror ของ Mac ผ่านสาย USB
 export PATH="/opt/homebrew/bin:$HOME/.local/bin:$PATH"  # nohup'd watcher has no shell profile
 SHARE="$HOME/.local/share/aeasy"
 SERVER="$SHARE/aeasy-server"
@@ -10,14 +10,59 @@ LOG="$SHARE/server.log"
 APP=dev.ctz.usbdisplay
 mkdir -p "$SHARE"  # config/log/dims live here; Homebrew installs don't run install.sh
 
+conf() { grep -m1 "^$1=" "$CFG" 2>/dev/null | cut -d= -f2-; }
+
 # route every adb call to the wireless device when WIFI_ADDR is set (aeasy wifi)
 adb() {
-  local w=$(grep -m1 '^WIFI_ADDR=' "$CFG" 2>/dev/null | cut -d= -f2)
+  local w=$(conf WIFI_ADDR)
   command adb ${w:+-s "$w"} "$@"
 }
 
 plugged() { [[ "$(adb get-state 2>/dev/null)" == "device" ]] }
-warn_unplugged() { echo "⚠️  No phone plugged in (USB-C) — connect the cable and try again" >&2 }
+warn_unplugged() { echo "⚠️  No phone plugged in (USB) — connect the cable and try again" >&2 }
+
+# ---- platform dispatch -------------------------------------------------------
+# android: any online adb device (USB or WIFI_ADDR). ios: a tethered device via
+# usbmuxd, or a reachable IOS_ADDR in Wi-Fi mode. Android is checked first, so a
+# dual setup preserves today's behaviour; PLATFORM=android|ios in the config
+# overrides. Missing libimobiledevice is NOT an error on the Android path.
+platform() {
+  local p=$(conf PLATFORM)
+  [[ -n "$p" ]] && { echo "$p"; return }
+  plugged && { echo android; return }
+  [[ -n "$(command -v idevice_id >/dev/null 2>&1 && idevice_id -l 2>/dev/null)" ]] && { echo ios; return }
+  local a=$(conf IOS_ADDR)
+  [[ -n "$a" ]] && nc -z -w1 "$a" 7355 >/dev/null 2>&1 && { echo ios; return }
+  echo none
+}
+
+ios_udid() {  # UDID config key disambiguates; otherwise first device wins (iPads/Watches list too)
+  local u=$(conf UDID)
+  [[ -n "$u" ]] && { echo "$u"; return }
+  idevice_id -l 2>/dev/null | head -1
+}
+
+ios_tools_ok() {
+  command -v iproxy >/dev/null && command -v idevice_id >/dev/null && command -v socat >/dev/null && return 0
+  echo "⚠️  iOS mode needs: brew install libusbmuxd libimobiledevice socat" >&2
+  return 1
+}
+
+# The device listens on :7355; usbmuxd only forwards Mac -> device, so iproxy maps
+# Mac :7356 -> device :7355 and socat bridges the unchanged aeasy-server listener
+# into it. Wi-Fi mode is the same bridge against the IP the app shows on screen.
+# Both are disowned, so stop/teardown must kill them by argv signature.
+relay_ensure() {
+  local a=$(conf IOS_ADDR)
+  if [[ -n "$a" ]]; then
+    pgrep -qf "socat TCP:$a:7355" || socat "TCP:$a:7355" TCP:127.0.0.1:7355 >/dev/null 2>&1 &!
+  else
+    local u=$(ios_udid)
+    pgrep -qf "iproxy 7356:7355" || iproxy 7356:7355 ${u:+-u "$u"} >/dev/null 2>&1 &!
+    pgrep -qf "socat TCP:127.0.0.1:7356" || socat TCP:127.0.0.1:7356 TCP:127.0.0.1:7355 >/dev/null 2>&1 &!
+  fi
+}
+relay_kill() { pkill -f "iproxy 7356:7355" 2>/dev/null; pkill -f "socat TCP:" 2>/dev/null }
 
 phone_rotation() {  # logical rotation; 'rotation N' alone can match the physical panel's (always 0)
   local d=$(adb shell dumpsys display 2>/dev/null)
@@ -48,40 +93,77 @@ server_start() {
   echo "🖥  Virtual display up ${dims[1]}x${dims[2]}"
 }
 
+# iOS: dims come FROM the server (the app reports its size as a type-3 packet and the
+# server writes dims.ios before restarting itself) — never written here. First run on
+# an unknown device builds one iPhone-7-sized display, then self-corrects.
+ios_server_start() {
+  pkill -f aeasy-server 2>/dev/null
+  local dims=($(cat "$SHARE/dims.ios" 2>/dev/null))
+  (( ${#dims} == 2 )) || dims=(372 664)
+  "$SERVER" ${dims[1]} ${dims[2]} --ios >>"$LOG" 2>&1 &!
+  echo "🖥  Virtual display up ${dims[1]}x${dims[2]} (iOS)"
+}
+
 app_open() {
   adb reverse tcp:7355 tcp:7355 >/dev/null 2>&1
   adb shell "pidof $APP >/dev/null || am start -n $APP/.MainActivity" >/dev/null 2>&1
 }
 
+# one dispatcher for every "apply the new config now" call site — mirror, screen,
+# sources, tune, restart — so a future subcommand can't reintroduce the bug of
+# writing $SHARE/dims or shelling adb on the iOS path
+session_restart() {
+  case "$(platform)" in
+    android) server_start; sleep 1; app_open ;;
+    ios)     ios_tools_ok || return 1; ios_server_start; relay_ensure
+             echo "📱 Open AEasy Display on your iPhone/iPad" ;;
+    *)       warn_unplugged; return 1 ;;
+  esac
+}
+
 watch_loop() {
   while true; do
-    if plugged; then
-      pgrep -qf aeasy-server || server_start
-      app_open
-      # rotate the virtual display only while our app is the focused one
-      if adb shell dumpsys window 2>/dev/null | grep -m1 mCurrentFocus | grep -q "$APP"; then
-        local cur=$(phone_dims)
-        if [[ -n "$cur" && "$cur" != "$(cat "$SHARE/dims" 2>/dev/null)" ]]; then
-          server_start
+    case "$(platform)" in
+      android)
+        pgrep -qf aeasy-server || server_start
+        app_open
+        # rotate the virtual display only while our app is the focused one
+        if adb shell dumpsys window 2>/dev/null | grep -m1 mCurrentFocus | grep -q "$APP"; then
+          local cur=$(phone_dims)
+          if [[ -n "$cur" && "$cur" != "$(cat "$SHARE/dims" 2>/dev/null)" ]]; then
+            server_start
+          fi
         fi
-      fi
-    else
-      # wireless mode: try to reconnect before giving up this tick
-      local w=$(grep -m1 '^WIFI_ADDR=' "$CFG" 2>/dev/null | cut -d= -f2)
-      [[ -n "$w" ]] && command adb connect "$w" >/dev/null 2>&1
-      # phone gone → tear down the virtual display until it's back
-      plugged || { pgrep -qf aeasy-server && pkill -f aeasy-server }
-    fi
+        ;;
+      ios)
+        # rotation needs no polling here: the app pushes a type-3 packet, the server
+        # writes dims.ios and exits, and the pgrep below relaunches it resized
+        pgrep -qf aeasy-server || ios_server_start
+        relay_ensure
+        ;;
+      *)
+        # android wireless mode: try to reconnect before giving up this tick
+        local w=$(conf WIFI_ADDR)
+        [[ -n "$w" ]] && command adb connect "$w" >/dev/null 2>&1
+        # device gone → tear down the virtual display (and iOS relays) until it's back
+        if [[ "$(platform)" == "none" ]]; then
+          pgrep -qf aeasy-server && pkill -f aeasy-server
+          relay_kill
+        fi
+        ;;
+    esac
     sleep 2
   done
 }
 
 case "${1:-start}" in
   start)
-    if ! plugged; then warn_unplugged; exit 1; fi
-    server_start
-    sleep 1
-    app_open
+    case "$(platform)" in
+      android) server_start; sleep 1; app_open ;;
+      ios)     ios_tools_ok || exit 1; ios_server_start; relay_ensure
+               echo "📱 Open AEasy Display on your iPhone/iPad (install: aeasy install-app)" ;;
+      *)       warn_unplugged; exit 1 ;;
+    esac
     pgrep -qf "aeasy _watch" || (nohup zsh "$0" _watch >/dev/null 2>&1 &!)
     pgrep -qf aeasy-tray || ("$SHARE/aeasy-tray" >/dev/null 2>&1 &!)
     echo "✅ Running — plug, unplug, or rotate freely (stop: aeasy stop)"
@@ -89,35 +171,36 @@ case "${1:-start}" in
   stop)
     pkill -f "aeasy _watch" 2>/dev/null
     pkill -f aeasy-server 2>/dev/null
+    relay_kill
     echo "⏹  Stopped"
     ;;
   restart)
-    if ! plugged; then warn_unplugged; exit 1; fi
-    server_start; sleep 1; app_open
+    session_restart || exit 1
     ;;
   app)
-    if ! plugged; then warn_unplugged; exit 1; fi
-    app_open && echo "📱 Viewer app launched on the phone"
+    case "$(platform)" in
+      android) app_open && echo "📱 Viewer app launched on the phone" ;;
+      ios)     echo "📱 Open AEasy Display on your iPhone/iPad — it cannot be launched remotely" ;;
+      *)       warn_unplugged; exit 1 ;;
+    esac
     ;;
   mirror)
     if [[ -z "$2" ]]; then echo "usage: aeasy mirror <AppName>   e.g. aeasy mirror Safari"; exit 1; fi
-    if ! plugged; then warn_unplugged; exit 1; fi
     set_sources "window:$2"
-    server_start; sleep 1; app_open
-    echo "🪞 Mirroring '$2' to the phone (back to extended: aeasy screen)"
+    session_restart || exit 1
+    echo "🪞 Mirroring '$2' (back to extended: aeasy screen)"
     echo "   showing several at once: aeasy sources display,window:$2"
     ;;
   screen)
     set_sources "display"
-    if plugged; then server_start; sleep 1; app_open; fi
+    session_restart >/dev/null 2>&1
     echo "🖥  Extended-display mode"
     ;;
   sources)
     if [[ -z "$2" ]]; then
-      cur=$(grep -m1 '^SOURCES=' "$CFG" 2>/dev/null | cut -d= -f2-)
+      cur=$(conf SOURCES)
       if [[ -n "$cur" ]]; then echo "$cur"
-      elif [[ "$(grep -m1 '^MODE=' "$CFG" 2>/dev/null | cut -d= -f2)" == "window" ]]; then
-        echo "window:$(grep -m1 '^WINDOW_APP=' "$CFG" 2>/dev/null | cut -d= -f2)"
+      elif [[ "$(conf MODE)" == "window" ]]; then echo "window:$(conf WINDOW_APP)"
       else echo "display"; fi
       exit 0
     fi
@@ -126,15 +209,33 @@ case "${1:-start}" in
     set_sources "$2"
     echo "🧩 Sources: $2"
     # config-only edit works unplugged, like `aeasy screen`
-    if plugged; then server_start; sleep 1; app_open; else echo "   (plug the phone in to apply)"; fi
+    session_restart >/dev/null 2>&1 || echo "   (plug the device in to apply)"
     ;;
   status)
-    W=$(grep -m1 '^WIFI_ADDR=' "$CFG" 2>/dev/null | cut -d= -f2)
-    if [[ -n "$W" ]]; then
-      if plugged; then echo "📶 Wireless: connected $W ($(adb shell getprop ro.product.model 2>/dev/null))"; else echo "📶 Wireless: not connected ($W)"; fi
-    else
-      if plugged; then echo "🔌 Cable: connected ($(adb shell getprop ro.product.model 2>/dev/null))"; else echo "🔌 Cable: not connected"; fi
-    fi
+    case "$(platform)" in
+      ios)
+        A=$(conf IOS_ADDR)
+        U=$(conf UDID)
+        NAME=$(ideviceinfo ${U:+-u "$U"} -k DeviceName 2>/dev/null)
+        if [[ -n "$A" ]]; then
+          nc -z -w1 "$A" 7355 >/dev/null 2>&1 && echo "📶 Wireless (iOS): reachable $A" || echo "📶 Wireless (iOS): unreachable ($A)"
+        elif [[ -n "$NAME" ]]; then echo "🔌 Cable (iOS): connected ($NAME)"
+        elif [[ -n "$(idevice_id -l 2>/dev/null)" ]]; then
+          echo "🔌 Cable (iOS): not trusted — unlock the device and tap Trust"
+        fi
+        pgrep -qf "iproxy 7356:7355" && echo "🔀 USB relay: running" || { [[ -z "$A" ]] && echo "🔀 USB relay: stopped"; }
+        pgrep -qf "socat TCP:" && echo "🔀 Bridge: running" || echo "🔀 Bridge: stopped"
+        ;;
+      *)
+        W=$(conf WIFI_ADDR)
+        if [[ -n "$W" ]]; then
+          if plugged; then echo "📶 Wireless: connected $W ($(adb shell getprop ro.product.model 2>/dev/null))"; else echo "📶 Wireless: not connected ($W)"; fi
+        else
+          if plugged; then echo "🔌 Cable: connected ($(adb shell getprop ro.product.model 2>/dev/null))"; else echo "🔌 Cable: not connected"; fi
+        fi
+        plugged && { adb shell pidof $APP >/dev/null 2>&1 && echo "📱 Phone app: open" || echo "📱 Phone app: closed"; }
+        ;;
+    esac
     pgrep -qf aeasy-server && echo "🖥  Server: running" || echo "🖥  Server: stopped"
     # only this server run: the log is append-only and quality is auto-lowered live now,
     # so an old LAGGY line would recommend tuning forever
@@ -142,7 +243,7 @@ case "${1:-start}" in
       echo "🐢 Lag detected — quality was lowered automatically (secondary panes first)"
     fi
     pgrep -qf "aeasy _watch" && echo "👀 Watcher: running" || echo "👀 Watcher: stopped"
-    plugged && { adb shell pidof $APP >/dev/null 2>&1 && echo "📱 Phone app: open" || echo "📱 Phone app: closed"; }
+    echo "🧩 Sources: $("$0" sources)"
     [[ -f "$CFG" ]] && { echo "⚙️  config:"; sed 's/^/    /' "$CFG"; }
     true
     ;;
@@ -155,29 +256,54 @@ case "${1:-start}" in
     { grep -vE '^(FPS|BITRATE|SCALE|AUTO)=' "$CFG" 2>/dev/null; echo "FPS=15"; echo "BITRATE=1500000"; echo "SCALE=60"; } > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
     echo "⚡ Low-latency preset: 15fps / 1.5Mbps / 60% resolution (good for budget phones)"
     echo "   fine-tune: aeasy config"
-    if plugged; then server_start; sleep 1; app_open; fi
+    session_restart >/dev/null 2>&1
     ;;
   wifi)
-    if [[ "$(command adb -d get-state 2>/dev/null)" != "device" ]]; then
-      echo "⚠️  Plug in the USB cable first — it's only needed once to enable Wi-Fi mode" >&2; exit 1
+    if [[ "$(platform)" == "ios" || -n "$2" ]]; then
+      # iOS: no discovery on purpose — the app shows its IP on screen; type it here
+      if [[ -z "$2" ]]; then echo "usage: aeasy wifi <ip>   (the AEasy app on the device shows its IP)"; exit 1; fi
+      { grep -vE '^IOS_ADDR=' "$CFG" 2>/dev/null; echo "IOS_ADDR=$2"; } > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
+      relay_kill; relay_ensure
+      echo "📶 iOS wireless mode on ($2) — you can unplug the cable now (back to USB: aeasy usb)"
+      echo "   note: iOS will ask once for Local Network permission"
+    else
+      if [[ "$(command adb -d get-state 2>/dev/null)" != "device" ]]; then
+        echo "⚠️  Plug in the USB cable first — it's only needed once to enable Wi-Fi mode" >&2; exit 1
+      fi
+      command adb -d tcpip 5555 >/dev/null; sleep 1
+      IP=$(command adb -d shell ip route 2>/dev/null | awk '/wlan/ {print $9; exit}')
+      if [[ -z "$IP" ]]; then echo "⚠️  Couldn't find the phone's IP — is it on Wi-Fi?" >&2; exit 1; fi
+      command adb connect "$IP:5555" >/dev/null || { echo "⚠️  adb connect $IP:5555 failed" >&2; exit 1; }
+      mkdir -p "$SHARE"
+      { grep -vE '^WIFI_ADDR=' "$CFG" 2>/dev/null; echo "WIFI_ADDR=$IP:5555"; } > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
+      echo "📶 Wireless mode on ($IP:5555) — you can unplug the cable now (back to USB: aeasy usb)"
     fi
-    command adb -d tcpip 5555 >/dev/null; sleep 1
-    IP=$(command adb -d shell ip route 2>/dev/null | awk '/wlan/ {print $9; exit}')
-    if [[ -z "$IP" ]]; then echo "⚠️  Couldn't find the phone's IP — is it on Wi-Fi?" >&2; exit 1; fi
-    command adb connect "$IP:5555" >/dev/null || { echo "⚠️  adb connect $IP:5555 failed" >&2; exit 1; }
-    mkdir -p "$SHARE"
-    { grep -vE '^WIFI_ADDR=' "$CFG" 2>/dev/null; echo "WIFI_ADDR=$IP:5555"; } > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
-    echo "📶 Wireless mode on ($IP:5555) — you can unplug the cable now (back to USB: aeasy usb)"
     ;;
   usb)
-    W=$(grep -m1 '^WIFI_ADDR=' "$CFG" 2>/dev/null | cut -d= -f2)
+    W=$(conf WIFI_ADDR)
     [[ -n "$W" ]] && command adb disconnect "$W" >/dev/null 2>&1
-    { grep -vE '^WIFI_ADDR=' "$CFG" 2>/dev/null; } > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
+    { grep -vE '^(WIFI_ADDR|IOS_ADDR)=' "$CFG" 2>/dev/null; } > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
+    relay_kill
     echo "🔌 Back to USB mode"
     ;;
   install-app)
-    if ! plugged; then warn_unplugged; exit 1; fi
-    adb install -r "$APK" && echo "📱 App installed on the phone"
+    if [[ "$(platform)" == "ios" || ! -f "$APK" && -d "$SHARE/ios-src" ]]; then
+      # free-Apple-ID flow: refresh the working copy every time (a Homebrew upgrade must
+      # not leave a stale app), open Xcode, user signs with their own account and Runs.
+      # $SHARE because Xcode writes the signing team and the Cellar is read-only.
+      if [[ ! -d "$SHARE/ios-src" ]]; then
+        echo "⚠️  iOS app source not installed — run make install from the repo, or open ios/AEasyDisplay.xcodeproj there" >&2; exit 1
+      fi
+      rm -rf "$SHARE/ios" && cp -R "$SHARE/ios-src" "$SHARE/ios"
+      open "$SHARE/ios/ios/AEasyDisplay.xcodeproj"   # ios-src keeps the repo shape: ios/ + mac/Protocol.swift
+      echo "📱 Xcode opened. One-time setup on your free Apple ID:"
+      echo "   1. Signing & Capabilities → Team → Add Account (any Apple ID, no paid program)"
+      echo "   2. Plug in the iPhone/iPad, pick it as the run destination, press Run"
+      echo "   ⚠️  Free certificates expire after 7 days — just press Run again when the app stops launching"
+    else
+      if ! plugged; then warn_unplugged; exit 1; fi
+      adb install -r "$APK" && echo "📱 App installed on the phone"
+    fi
     ;;
   log)
     tail -20 "$LOG"
@@ -188,43 +314,49 @@ case "${1:-start}" in
   help|--help|-h)
     if [[ "$2" == "--th" || "$2" == "th" ]]; then
       cat <<'EOF'
-aeasy — ใช้มือถือ Android เป็นจอเสริมของ Mac ผ่านสาย USB-C (alias: aez)
+aeasy — ใช้มือถือ Android หรือ iPhone/iPad เป็นจอเสริมของ Mac ผ่านสาย USB (alias: aez)
 
-  aeasy start          เริ่มจอเสริม + เฝ้าสายอัตโนมัติ (เสียบสายปุ๊บแอปเด้งเอง, หมุนเครื่องได้)
+  aeasy start          เริ่มจอเสริม + เฝ้าสายอัตโนมัติ (Android: แอปเด้งเอง / iOS: เปิดแอปเอง)
   aeasy stop           หยุดทั้งหมด
   aeasy status         ดูสถานะ สาย / เซิร์ฟเวอร์ / แอปมือถือ / config
-  aeasy app            เปิดแอปบนมือถือ (แจ้งเตือนถ้าไม่ได้เสียบสาย)
+  aeasy app            เปิดแอปบนมือถือ (iOS เปิดจากเครื่องเองเท่านั้น)
   aeasy mirror <แอพ>   mirror เฉพาะหน้าต่างแอพเดียว เช่น: aeasy mirror Safari
   aeasy screen         กลับเป็นโหมดจอเสริมเต็มจอ
   aeasy sources [ลิสต์] ดู/ตั้งแหล่งภาพได้สูงสุด 3 อัน แสดงซ้อนกันบนมือถือ
-                       เช่น: aeasy sources display,window:Safari  (ลากจัดตำแหน่งได้ในแอปมือถือ)
-  aeasy config         เปิดหน้าต่างตั้งค่า (fps / bitrate / ความละเอียด / โหมด)
+                       เช่น: aeasy sources display,window:Safari  (ลากจัดตำแหน่งได้ในแอป Android)
+  aeasy config         เปิดหน้าต่างตั้งค่า (fps / bitrate / ความละเอียด)
   aeasy tune           ตั้งค่าโหมดลื่นสำหรับมือถือช้า (15fps / 60%) — ใช้เมื่อภาพหน่วง
-  aeasy wifi           เปลี่ยนเป็นโหมดไร้สาย (เสียบสายครั้งเดียวตอนเปิดใช้ แล้วถอดได้เลย)
+  aeasy wifi [ip]      โหมดไร้สาย (Android: เสียบสายครั้งเดียว / iOS: พิมพ์ IP ที่แอปโชว์)
   aeasy usb            กลับมาใช้สาย USB
   aeasy restart        รีสตาร์ทจอเสมือน
-  aeasy install-app    ติดตั้ง APK ลงมือถือ
+  aeasy install-app    Android: ติดตั้ง APK / iOS: เปิด Xcode ให้ sign ด้วย Apple ID ตัวเอง (ฟรี)
   aeasy log            ดู log ล่าสุดของเซิร์ฟเวอร์
+
+  iOS ต้องมี: brew install libusbmuxd libimobiledevice socat
+  ข้อจำกัด iOS: ล็อกหน้าจอ = หยุดสตรีม, cert ฟรีหมดอายุทุก 7 วัน (กด Run ใน Xcode ใหม่)
 EOF
     else
       cat <<'EOF'
-aeasy — use an Android phone as a second display for your Mac over USB-C (alias: aez)
+aeasy — use an Android phone or iPhone/iPad as a second display for your Mac over USB (alias: aez)
 
-  aeasy start          start the display + cable watcher (auto-launches the phone app, auto-rotates)
+  aeasy start          start the display + cable watcher (Android auto-launches the app; iOS: open it yourself)
   aeasy stop           stop everything
-  aeasy status         show cable / server / phone-app status and config
-  aeasy app            launch the viewer app on the phone (warns if unplugged)
+  aeasy status         show cable / server / device-app status and config
+  aeasy app            launch the viewer app (iOS can only be opened on the device)
   aeasy mirror <App>   mirror a single app window, e.g.: aeasy mirror Safari
   aeasy screen         back to full extended-display mode
   aeasy sources [list] show/set up to 3 sources shown as panes on the phone
-                       e.g.: aeasy sources display,window:Safari  (drag to arrange in the app)
-  aeasy config         open the settings GUI (fps / bitrate / resolution / mode)
-  aeasy tune           low-latency preset for slower phones (15fps / 60%) — use when laggy
-  aeasy wifi           switch to wireless mode (cable needed once to enable, then unplug)
+                       e.g.: aeasy sources display,window:Safari  (drag to arrange in the Android app)
+  aeasy config         open the settings GUI (fps / bitrate / resolution)
+  aeasy tune           low-latency preset for slower devices (15fps / 60%) — use when laggy
+  aeasy wifi [ip]      wireless mode (Android: cable once to enable; iOS: type the IP the app shows)
   aeasy usb            switch back to USB mode
   aeasy restart        restart the virtual display
-  aeasy install-app    install the APK onto the phone
+  aeasy install-app    Android: install the APK / iOS: open Xcode to sign with your own free Apple ID
   aeasy log            tail the server log
+
+  iOS needs: brew install libusbmuxd libimobiledevice socat
+  iOS limits: locking the screen stops the stream; free certs expire every 7 days (press Run again)
 
   aeasy --help --th    แสดงเป็นภาษาไทย
 EOF

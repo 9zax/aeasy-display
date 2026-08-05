@@ -1,0 +1,27 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build macOS binaries
+        run: make build
+
+      - name: Protocol assertions (pure, no permissions)
+        run: make check
+
+      - name: Build iOS app (unsigned)
+        run: |
+          cd ios && xcodebuild -project AEasyDisplay.xcodeproj -scheme AEasyDisplay \
+            -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build
+
+      # not here on purpose:
+      #   make smoke — needs Screen Recording + Accessibility granted to the binary
+      #   make apk   — GitHub's macOS runners ship no Android SDK

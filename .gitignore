@@ -8,3 +8,5 @@ mac/aeasy-config
 mac/aeasy-tray
 .claude
 mac/check
+ios/AEasyDisplay.xcodeproj/xcuserdata/
+ios/build/

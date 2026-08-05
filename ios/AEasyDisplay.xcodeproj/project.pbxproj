@@ -1,0 +1,228 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AE0001000000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0002000000000000000001 /* AppDelegate.swift */; };
+		AE0001000000000000000002 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0002000000000000000002 /* ViewController.swift */; };
+		AE0001000000000000000003 /* StreamListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0002000000000000000003 /* StreamListener.swift */; };
+		AE0001000000000000000004 /* NalScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0002000000000000000004 /* NalScanner.swift */; };
+		AE0001000000000000000005 /* Decoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0002000000000000000005 /* Decoder.swift */; };
+		AE0001000000000000000006 /* Protocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0002000000000000000006 /* Protocol.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		AE0002000000000000000001 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		AE0002000000000000000002 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
+		AE0002000000000000000003 /* StreamListener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamListener.swift; sourceTree = "<group>"; };
+		AE0002000000000000000004 /* NalScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NalScanner.swift; sourceTree = "<group>"; };
+		AE0002000000000000000005 /* Decoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Decoder.swift; sourceTree = "<group>"; };
+		AE0002000000000000000006 /* Protocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Protocol.swift; path = ../../mac/Protocol.swift; sourceTree = "<group>"; };
+		AE0002000000000000000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AE0002000000000000000008 /* AEasyDisplay.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AEasyDisplay.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		AE0003000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		AE0004000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				AE0004000000000000000002 /* AEasyDisplay */,
+				AE0004000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		AE0004000000000000000002 /* AEasyDisplay */ = {
+			isa = PBXGroup;
+			children = (
+				AE0002000000000000000001 /* AppDelegate.swift */,
+				AE0002000000000000000002 /* ViewController.swift */,
+				AE0002000000000000000003 /* StreamListener.swift */,
+				AE0002000000000000000004 /* NalScanner.swift */,
+				AE0002000000000000000005 /* Decoder.swift */,
+				AE0002000000000000000006 /* Protocol.swift */,
+				AE0002000000000000000007 /* Info.plist */,
+			);
+			path = AEasyDisplay;
+			sourceTree = "<group>";
+		};
+		AE0004000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AE0002000000000000000008 /* AEasyDisplay.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		AE0005000000000000000001 /* AEasyDisplay */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AE0008000000000000000002 /* Build configuration list for PBXNativeTarget "AEasyDisplay" */;
+			buildPhases = (
+				AE0006000000000000000001 /* Sources */,
+				AE0003000000000000000001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AEasyDisplay;
+			productName = AEasyDisplay;
+			productReference = AE0002000000000000000008 /* AEasyDisplay.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AE0007000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1520;
+				LastUpgradeCheck = 1520;
+			};
+			buildConfigurationList = AE0008000000000000000001 /* Build configuration list for PBXProject "AEasyDisplay" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = AE0004000000000000000001;
+			productRefGroup = AE0004000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AE0005000000000000000001 /* AEasyDisplay */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AE0006000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AE0001000000000000000001 /* AppDelegate.swift in Sources */,
+				AE0001000000000000000002 /* ViewController.swift in Sources */,
+				AE0001000000000000000003 /* StreamListener.swift in Sources */,
+				AE0001000000000000000004 /* NalScanner.swift in Sources */,
+				AE0001000000000000000005 /* Decoder.swift in Sources */,
+				AE0001000000000000000006 /* Protocol.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		AE0009000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		AE0009000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		AE0009000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AEasyDisplay/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.ctz.aeasydisplay;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AE0009000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AEasyDisplay/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.ctz.aeasydisplay;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		AE0008000000000000000001 /* Build configuration list for PBXProject "AEasyDisplay" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AE0009000000000000000001 /* Debug */,
+				AE0009000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AE0008000000000000000002 /* Build configuration list for PBXNativeTarget "AEasyDisplay" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AE0009000000000000000003 /* Debug */,
+				AE0009000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = AE0007000000000000000001 /* Project object */;
+}

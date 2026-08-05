@@ -48,6 +48,18 @@ flowchart LR
 - **ฝั่ง Android** — แอปเล็ก ๆ (ขอสิทธิ์แค่ `INTERNET`) เชื่อมต่อ ถอดรหัสด้วยฮาร์ดแวร์ แล้วแสดงเต็มจอ พร้อมเชื่อมต่อใหม่อัตโนมัติทุกครั้งที่สตรีมรีสตาร์ต
 - **CLI `aeasy`** — คอยเฝ้าสาย: เสียบปุ๊บทุกอย่างเริ่มเอง หมุนมือถือแล้ว virtual display พลิกตาม
 
+## iPhone และ iPad (เบต้า)
+
+แอป viewer ฝั่ง iOS อยู่ใน [`ios/`](ios/) สตรีมแบบเดียวกัน — แต่แพลตฟอร์มของ Apple ทำให้ต่างไป 3 เรื่อง อ่านก่อนใช้:
+
+- **ติดตั้งผ่าน Xcode ด้วย Apple ID ของคุณเอง (ฟรี)** — `aeasy install-app` จะเปิดโปรเจกต์ให้ ไปที่ Signing & Capabilities ใส่ Apple ID อะไรก็ได้ แล้วกด Run ไม่ต้องเสียเงินโปรแกรมนักพัฒนา แต่ **cert ฟรีหมดอายุทุก 7 วัน**: ถ้าแอปเปิดไม่ขึ้น เสียบสายแล้วกด Run ใหม่
+- **สาย USB ต้องมี** `brew install libusbmuxd libimobiledevice socat` (เทียบเท่า `android-platform-tools` ของฝั่ง iOS) เสียบครั้งแรกต้องกด Trust บนเครื่อง
+- **ล็อกหน้าจอ = สตรีมหยุด** — iOS พักแอป ปลดล็อกแล้วต่อใหม่เอง และ Mac สั่งเปิดแอปให้ไม่ได้: เสียบสาย เปิดแอป AEasy Display บนเครื่องเอง จบ ส่วนหมุนจอ, สัมผัส, HEVC และโหมดไร้สาย (`aeasy wifi <ip>` — แอปโชว์ IP ให้) ใช้ได้เหมือน Android
+
+**เรื่อง iPad:** [Sidecar](https://support.apple.com/th-th/102597) ของ Apple เองดีกว่าถ้าคุณ sign in Apple ID อยู่แล้ว — ฟรี, native, รองรับ Apple Pencil ที่ AEasy รองรับ iPad ไว้สำหรับคนที่ไม่อยาก sign in ส่วน iPhone ไม่มีทางเลือก first-party เลย นั่นคือเหตุผลที่ฟีเจอร์นี้มีอยู่
+
+สถานะ: **เบต้า** — กำลังพัฒนาต่อเนื่อง ตามได้ที่ [`specs/2026-08-05-ios-client.md`](specs/2026-08-05-ios-client.md)
+
 ## สิ่งที่ต้องมี
 
 - macOS 13+ (Apple Silicon หรือ Intel), Xcode Command Line Tools

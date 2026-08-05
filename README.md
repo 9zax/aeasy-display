@@ -48,6 +48,18 @@ flowchart LR
 - **Android side** — a tiny app (no permissions except `INTERNET`) connects, hardware-decodes, and renders fullscreen. It reconnects automatically whenever the stream restarts.
 - **The `aeasy` CLI** — watches the cable: plug in and everything starts; rotate the phone and the virtual display flips with it.
 
+## iPhone & iPad (beta)
+
+The iOS viewer lives in [`ios/`](ios/) and streams the same way — but Apple's platform changes three things, so read this first:
+
+- **Install is via Xcode with your own free Apple ID** — `aeasy install-app` opens the project; add any Apple ID under Signing & Capabilities and press Run. No paid developer program, but **free certificates expire after 7 days**: when the app stops launching, plug in and press Run again.
+- **USB transport needs** `brew install libusbmuxd libimobiledevice socat` (the iOS equivalent of `android-platform-tools`). The first connection asks you to Trust the Mac on the device.
+- **Locking the screen stops the stream** — iOS suspends the app; unlock and it reconnects. The app can't be launched from the Mac either: plug in, open AEasy Display on the device, done. Rotation, touch, HEVC, and Wi-Fi mode (`aeasy wifi <ip>` — the app shows its IP) all work as on Android.
+
+**iPad note:** Apple's own [Sidecar](https://support.apple.com/en-us/102597) is the better tool if you're signed into an Apple ID — free, native, Apple Pencil. AEasy's iPad support is for people who won't sign in. iPhone has no first-party equivalent, which is why this exists.
+
+Status: **beta** — in active development, tracked in [`specs/2026-08-05-ios-client.md`](specs/2026-08-05-ios-client.md).
+
 ## Requirements
 
 - macOS 13+ (Apple Silicon or Intel), Xcode Command Line Tools

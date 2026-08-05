@@ -17,8 +17,8 @@ func shell(_ cmd: String) -> Int32 {
 
 // bracket pattern so pgrep doesn't match our own `zsh -c` wrapper
 func serverRunning() -> Bool { shell("pgrep -qf 'aeasy-serve[r]'") == 0 }
-func cablePlugged() -> Bool {  // USB or wireless adb — any online device counts
-    shell("export PATH=/opt/homebrew/bin:$PATH; adb devices 2>/dev/null | grep -q 'device$'") == 0
+func cablePlugged() -> Bool {  // any online device counts: adb (USB/wireless) or a tethered iOS device
+    shell("export PATH=/opt/homebrew/bin:$PATH; adb devices 2>/dev/null | grep -q 'device$' || idevice_id -l 2>/dev/null | grep -q .") == 0
 }
 
 final class Tray: NSObject, NSApplicationDelegate, NSMenuDelegate {

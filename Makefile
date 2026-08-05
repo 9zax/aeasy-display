@@ -19,8 +19,9 @@ help: ## show this help
 
 build: mac/aeasy-server mac/aeasy-config mac/aeasy-tray ## build the macOS binaries
 
-mac/aeasy-server: mac/AEasyServer.swift mac/virtual-display.h
-	cd mac && $(SWIFTC) -import-objc-header virtual-display.h -o aeasy-server AEasyServer.swift
+# multi-file swiftc allows top-level code only in a file literally named main.swift
+mac/aeasy-server: mac/AEasyServer.swift mac/Protocol.swift mac/virtual-display.h
+	cd mac && ln -sf AEasyServer.swift main.swift && $(SWIFTC) -import-objc-header virtual-display.h -o aeasy-server Protocol.swift main.swift; r=$$?; rm -f mac/main.swift main.swift; exit $$r
 
 mac/aeasy-config: mac/AEasyConfig.swift
 	cd mac && $(SWIFTC) -o aeasy-config AEasyConfig.swift

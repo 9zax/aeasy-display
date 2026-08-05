@@ -10,7 +10,7 @@
 | | AEasy Display | Deskreen | Weylus | VirtScreen | Sunshine + Moonlight |
 |---|---|---|---|---|---|
 | ฝั่งคอม | macOS เท่านั้น | Win / macOS / Linux | Win / macOS / Linux | Linux (X11) เท่านั้น | Win / macOS / Linux |
-| ฝั่งจอเสริม | Android (แอป viewer) | ทุกอย่างที่มี browser | ทุกอย่างที่มี browser | ทุกอย่างที่รับ VNC ได้ | Android / iOS / อื่น ๆ (แอป Moonlight) |
+| ฝั่งจอเสริม | Android / iOS เบต้า (แอป viewer) | ทุกอย่างที่มี browser | ทุกอย่างที่มี browser | ทุกอย่างที่รับ VNC ได้ | Android / iOS / อื่น ๆ (แอป Moonlight) |
 | สร้าง virtual display ให้เอง | ✅ (`CGVirtualDisplay`) | ❌ ต้องมี dummy plug หรือทำ virtual display เอง | ⚠️ Linux เท่านั้น (macOS = มิเรอร์อย่างเดียว) | ✅ (xrandr) | ❌ ต้องมี dummy plug หรือ BetterDisplay ช่วย |
 | การเชื่อมต่อ | USB (zero network) หรือ Wi-Fi (`aeasy wifi`) | Wi-Fi (WebRTC) | Wi-Fi (WebRTC/WebSocket) | Wi-Fi (VNC) | Wi-Fi / LAN (มี hw encode) |
 | ความหน่วง | ต่ำ (hw encode/decode ทั้งสาย) | ปานกลาง–สูง (software encode ผ่าน browser) | ปานกลาง (มี hw encode บางแพลตฟอร์ม) | สูง (VNC ไม่เหมาะกับวิดีโอ) | ต่ำมาก (ออกแบบมาเพื่อเกม) |

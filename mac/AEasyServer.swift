@@ -52,6 +52,9 @@ let FPS = Int32(_conf["FPS"] ?? "") ?? 20
 let BITRATE = Int(_conf["BITRATE"] ?? "") ?? 2_000_000
 let SCALE = min(100, max(40, Int(_conf["SCALE"] ?? "") ?? 80))  // encode size, % of panel
 let CODEC = _conf["CODEC"] ?? "h264"                            // h264 | hevc (phone sniffs the stream)
+// iOS display-size multiplier. Applied HERE, not in the app — the app can't read this
+// config, so it always reports pure half-native pixels and the Mac calibrates.
+let IOS_SCALE = min(2.0, max(0.5, Double(_conf["IOS_SCALE"] ?? "") ?? 1.0))
 
 // re-read before merging: `aeasy sources` or the settings GUI may have edited the file
 // since launch, and rebuilding it from a startup snapshot would silently revert them
@@ -106,6 +109,9 @@ if CommandLine.arguments.count >= 3,
     pxW = a  // passed as-is: W>H = landscape, W<H = portrait
     pxH = b
 }
+// appended AFTER W H — `aeasy-server --ios 372 664` would silently fall back to the
+// 1650x720 defaults above, which looks like a sizing bug rather than an argv bug
+let IOS_MODE = CommandLine.arguments.contains("--ios")
 
 func fitEven(_ w: Double, _ h: Double, into maxW: Double, _ maxH: Double) -> (Int, Int) {
     let s = min(maxW / w, maxH / h)
@@ -391,6 +397,12 @@ final class Source {
     /// nothing, so without this a pane on a static window would stay black forever.
     var lastPB: CVPixelBuffer?
 
+    // ≥1 Hz cap: an iOS relay with the app closed connects and drops every ~2 s, and each
+    // connect subscribes — without this, an unrelated viewer on the same source eats a
+    // forced IDR per cycle, indefinitely. A second forced keyframe within a second is
+    // redundant anyway (MaxKeyFrameInterval is one second's worth of frames).
+    private var lastForcedKey = Date.distantPast
+
     init(id: String, index: Int, budget: Int) {
         self.id = id
         self.index = index
@@ -408,6 +420,8 @@ final class Source {
     func forceKeyframe() {
         sampleQueue.async { [weak self] in
             guard let self, let pb = self.lastPB else { return }
+            guard Date().timeIntervalSince(self.lastForcedKey) >= 1 else { return }
+            self.lastForcedKey = Date()
             self.encoder.encode(pb, force: true)
         }
     }
@@ -516,7 +530,7 @@ func raiseWindow(pid: pid_t, wid: CGWindowID, frame: CGRect) {
 /// one unresponsive app would otherwise freeze every video stream behind it.
 func handleTouch(_ d: Data, _ src: Source) {
     let type = Int(d[d.startIndex])
-    guard type < 3 else { return }   // type 3+ is reserved (see specs/2026-08-05-ios-client.md)
+    guard type < 3 else { return }   // defensive: drainTouch routes type 3 to handleResize and drops 4+
     let nx = Double(UInt16(d[d.startIndex + 1]) << 8 | UInt16(d[d.startIndex + 2])) / 65535.0
     let ny = Double(UInt16(d[d.startIndex + 3]) << 8 | UInt16(d[d.startIndex + 4])) / 65535.0
     let mouseType: [CGEventType] = [.leftMouseDown, .leftMouseDragged, .leftMouseUp]
@@ -555,6 +569,12 @@ final class Conn {
     var state: ConnState = .handshaking
     var buf = Data()
     var pending = 0
+    // drop accounting lives on the connection, not the server: `conns[k] = nil` then
+    // destroys it structurally, so a churning relay (iOS app closed: connect + drop
+    // every ~2 s) cannot accumulate phantom drops against the source and step the
+    // primary down to the floor — stepDown has no inverse for the life of the process
+    var sent = 0
+    var dropped = 0
     init(_ c: NWConnection) { self.c = c }
 }
 
@@ -563,7 +583,8 @@ final class TCPServer {
     let queue = DispatchQueue(label: "net")
     private let touchQueue = DispatchQueue(label: "touch")
     private var headers: [Int: Data] = [:]        // per-source Annex-B parameter sets, for late joiners
-    private var sent: [Int: Int] = [:], dropped: [Int: Int] = [:]
+    var sawTypeThree = false      // FR-26 latch: set on first resize packet, read by the --ios timer
+    private var restarting = false // resize restart is one-shot even with several subscribers
     private var lastAlert = Date.distantPast
     private var healthTimer: DispatchSourceTimer?
     private var lastBroadcast = Date.distantPast
@@ -701,13 +722,52 @@ final class TCPServer {
         })
     }
 
+    // The 5-byte grid is held HERE, by fixed-stride slicing plus the 0-4 byte remainder
+    // surviving to the next receive — not by the reader, whose maximumLength is 65536.
+    // Never consume a partial unit: discarding one desyncs every later packet by its
+    // width, and a misaligned type-3 reads as a plausible touch (wandering cursor).
     private func drainTouch(_ conn: Conn, _ index: Int) {
-        guard index < sources.count else { return }
+        guard index < sources.count, case .video = conn.state else { return }
         let src = sources[index]
-        while conn.buf.count >= 5 {
-            let pkt = Data(conn.buf.prefix(5))
-            conn.buf = Data(conn.buf.dropFirst(5))
-            touchQueue.async { handleTouch(pkt, src) }
+        var off = conn.buf.startIndex
+        let end = conn.buf.endIndex
+        while end - off >= 5 {
+            let pkt = Data(conn.buf[off ..< off + 5])
+            off += 5
+            switch Protocol.parse(pkt) {
+            case .touch:
+                touchQueue.async { handleTouch(pkt, src) }
+            case .resize(let w, let h):
+                handleResize(src, w, h)   // net queue: pure state + one dispatch, never touchQueue —
+                                          // that queue blocks behind raiseWindow's AX calls
+            case .invalid:
+                break                     // types 4...255 reserved; drop, keep the grid
+            }
+        }
+        conn.buf = off == end ? Data() : Data(conn.buf[off ..< end])
+    }
+
+    // type-3: the device's viewport declaration, honoured only from a subscriber of the
+    // primary display source. A window: pane's dimensions are the Mac window's, not the
+    // phone's — and a secondary pane must never be able to restart the whole server.
+    private func handleResize(_ src: Source, _ w: Int, _ h: Int) {
+        sawTypeThree = true
+        guard src.isPrimary, src.isDisplay, src.displayID != 0, src.alive else {
+            NSLog("type-3 \(w)x\(h) from non-viewport subscriber (\(src.id)) — ignored")
+            return
+        }
+        // scale BEFORE comparing: pxW/pxH are already scaled, so comparing the raw
+        // report against them would restart forever whenever IOS_SCALE != 1
+        let sw = Int(Double(w) * IOS_SCALE) & ~3, sh = Int(Double(h) * IOS_SCALE) & ~3
+        guard Protocol.shouldRestart(current: (Int(pxW), Int(pxH)), reported: (sw, sh)) else { return }
+        guard !restarting else { return }
+        restarting = true
+        NSLog("device reports \(w)x\(h) -> \(sw)x\(sh) (was \(pxW)x\(pxH)) — restarting to rebuild the virtual display")
+        DispatchQueue.global(qos: .utility).async {
+            // atomic: the watcher reads this on a 2 s tick and a torn read launches garbage
+            try? "\(sw) \(sh)".write(toFile: shareDir + "/dims.ios", atomically: true, encoding: .utf8)
+            exit(0)   // watcher relaunches at the new size; process death is the teardown,
+                      // same as dropSource's exit(1) — there is no stopCapture anywhere
         }
     }
 
@@ -827,8 +887,8 @@ final class TCPServer {
         queue.async {
             for (k, conn) in self.conns {
                 guard case .video(let i) = conn.state, i == index else { continue }
-                if droppable && conn.pending > 2 { self.dropped[index, default: 0] += 1; continue }
-                self.sent[index, default: 0] += 1
+                if droppable && conn.pending > 2 { conn.dropped += 1; continue }
+                conn.sent += 1
                 conn.pending += 1
                 conn.c.send(content: d, completion: .contentProcessed { _ in
                     self.queue.async { if self.conns[k] != nil { conn.pending = max(0, conn.pending - 1) } }
@@ -845,12 +905,19 @@ final class TCPServer {
         t.setEventHandler { [weak self] in
             guard let self else { return }
             var laggy: [Int] = []
+            // per-connection counters, summed per source and zeroed in the same pass —
+            // a subscriber that disconnected took its counters with it
+            var sent = [Int: Int](), drops = [Int: Int]()
+            for conn in self.conns.values {
+                guard case .video(let i) = conn.state else { continue }
+                sent[i, default: 0] += conn.sent
+                drops[i, default: 0] += conn.dropped
+                conn.sent = 0
+                conn.dropped = 0
+            }
             for src in sources where src.alive {
-                let total = (self.sent[src.index] ?? 0) + (self.dropped[src.index] ?? 0)
-                let drops = self.dropped[src.index] ?? 0
-                self.sent[src.index] = 0
-                self.dropped[src.index] = 0
-                guard total > 100, Double(drops) / Double(total) > 0.25 else { continue }
+                let total = (sent[src.index] ?? 0) + (drops[src.index] ?? 0)
+                guard total > 100, Double(drops[src.index] ?? 0) / Double(total) > 0.25 else { continue }
                 laggy.append(src.index)
             }
             guard !laggy.isEmpty else { return }
@@ -951,6 +1018,12 @@ Task {
         if !AXIsProcessTrusted() {
             NSLog("touch input needs Accessibility: System Settings > Privacy & Security > Accessibility > add aeasy-server (re-grant after every rebuild)")
             AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary)
+            // an iOS client is a legacy video client and never opens the control channel,
+            // so the no_accessibility error message can't reach it — notify on the Mac instead
+            if IOS_MODE { notify("Taps from the iPhone do nothing until Accessibility is granted to aeasy-server") }
+        }
+        if IOS_MODE, !SOURCE_IDS.contains("display") {
+            NSLog("iOS client with no display source — rotation will not resize (check `aeasy sources`)")
         }
 
         var displays: SCShareableContent?
@@ -1021,6 +1094,16 @@ Task {
         let s = try TCPServer()
         server = s
         s.startHealthCheck()
+
+        // The app cannot be launched remotely (no `am start` on iOS), so tell the user.
+        // Trigger on "no type-3 packet", never "no TCP connection": iproxy accept()s the
+        // local dial BEFORE trying the usbmux side, so with the app closed the relay
+        // still connects, subscribes, and drops — a connection latch would never fire.
+        if IOS_MODE {
+            s.queue.asyncAfter(deadline: .now() + 5) { [weak s] in
+                if let s, !s.sawTypeThree { notify("Open AEasy Display on your iPhone") }
+            }
+        }
 
         for src in sources {
             try await src.stream?.startCapture()

@@ -10,7 +10,7 @@ Compared against the closest open source projects: [scrcpy](https://github.com/G
 | | AEasy Display | Deskreen | Weylus | VirtScreen | Sunshine + Moonlight |
 |---|---|---|---|---|---|
 | Computer side | macOS only | Win / macOS / Linux | Win / macOS / Linux | Linux (X11) only | Win / macOS / Linux |
-| Display side | Android (viewer app) | anything with a browser | anything with a browser | anything with a VNC client | Android / iOS / more (Moonlight app) |
+| Display side | Android / iOS beta (viewer apps) | anything with a browser | anything with a browser | anything with a VNC client | Android / iOS / more (Moonlight app) |
 | Creates the virtual display for you | ✅ (`CGVirtualDisplay`) | ❌ needs a dummy plug or DIY virtual display | ⚠️ Linux only (macOS = mirror only) | ✅ (xrandr) | ❌ needs a dummy plug or BetterDisplay |
 | Transport | USB (zero network) or Wi-Fi (`aeasy wifi`) | Wi-Fi (WebRTC) | Wi-Fi (WebRTC/WebSocket) | Wi-Fi (VNC) | Wi-Fi / LAN (hw encode) |
 | Latency | low (hw encode/decode end to end) | medium–high (software encode via browser) | medium (hw encode on some platforms) | high (VNC isn't built for video) | very low (built for game streaming) |
