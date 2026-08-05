@@ -8,7 +8,7 @@
 
 **Turn your Android phone into a second display for your Mac — over a USB-C cable. No Wi-Fi, no accounts, no paid apps.**
 
-![Platform](https://img.shields.io/badge/macOS-13%2B-blue) ![Android](https://img.shields.io/badge/Android-8%2B-green) ![License](https://img.shields.io/badge/license-MIT-lightgrey)
+![Platform](https://img.shields.io/badge/macOS-13%2B-blue) ![Android](https://img.shields.io/badge/Android-8%2B-green) ![License](https://img.shields.io/badge/license-MIT-lightgrey) [![Release](https://img.shields.io/github/v/release/9zax/aeasy-display)](https://github.com/9zax/aeasy-display/releases/latest)
 
 <p align="center">
   <img src="docs/demo.jpg" width="720" alt="AEasy Display demo — Android phone as a second display for a Mac">

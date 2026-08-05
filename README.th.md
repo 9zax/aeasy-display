@@ -8,7 +8,7 @@
 
 **เปลี่ยนมือถือ Android ให้เป็นจอที่สองของ Mac — ผ่านสาย USB-C เส้นเดียว ไม่ใช้ Wi-Fi ไม่ต้องสมัครอะไร ไม่มีแอปเสียเงิน**
 
-![Platform](https://img.shields.io/badge/macOS-13%2B-blue) ![Android](https://img.shields.io/badge/Android-8%2B-green) ![License](https://img.shields.io/badge/license-MIT-lightgrey)
+![Platform](https://img.shields.io/badge/macOS-13%2B-blue) ![Android](https://img.shields.io/badge/Android-8%2B-green) ![License](https://img.shields.io/badge/license-MIT-lightgrey) [![Release](https://img.shields.io/github/v/release/9zax/aeasy-display)](https://github.com/9zax/aeasy-display/releases/latest)
 
 <p align="center">
   <img src="docs/demo.jpg" width="720" alt="ตัวอย่างการใช้งาน AEasy Display — มือถือ Android เป็นจอที่สองของ Mac">
