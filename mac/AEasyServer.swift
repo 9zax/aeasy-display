@@ -1,5 +1,6 @@
 // AEasyServer — streams a virtual display OR one app window to an Android phone over USB.
-// H.264 Annex-B over TCP :7355; the Android app connects through `adb reverse`.
+// H.264/HEVC Annex-B over TCP :7355; the Android app connects through `adb reverse`.
+// The same socket carries 5-byte touch packets back (phone finger -> Mac cursor).
 // Usage: aeasy-server [W] [H]   (phone panel pixels; W>H landscape, W<H portrait)
 // Config: ~/.local/share/aeasy/config  (FPS, BITRATE, SCALE, MODE=display|window, WINDOW_APP)
 
@@ -33,6 +34,7 @@ let SCALE = min(100, max(40, Int(_conf["SCALE"] ?? "") ?? 80))  // encode size, 
 let MODE = _conf["MODE"] ?? "display"                            // display | window
 let WINDOW_APP = _conf["WINDOW_APP"] ?? ""
 let AUTO = (_conf["AUTO"] ?? "1") == "1"  // first connection = auto-tune until the user picks settings
+let CODEC = _conf["CODEC"] ?? "h264"                             // h264 | hevc (phone sniffs the stream)
 
 func writeConf(_ updates: [String: String]) {
     var c = _conf
@@ -75,6 +77,7 @@ final class TCPServer {
                             c.send(content: self.header, completion: .contentProcessed { _ in })
                         }
                     }
+                    self.recvTouch(c)
                 case .failed, .cancelled:
                     self.queue.async {
                         self.conns[ObjectIdentifier(c)] = nil
@@ -87,6 +90,15 @@ final class TCPServer {
         }
         l.start(queue: queue)
         NSLog("listening on \(PORT)")
+    }
+
+    // phone -> Mac touch events: fixed 5-byte packets [type u8][x u16 BE][y u16 BE], coords 0..65535
+    private func recvTouch(_ c: NWConnection) {
+        c.receive(minimumIncompleteLength: 5, maximumLength: 5) { [weak self, weak c] data, _, complete, _ in
+            if let data, data.count == 5 { handleTouch(data) }
+            guard let self, let c, !complete else { return }
+            self.recvTouch(c)
+        }
     }
 
     private var pending: [ObjectIdentifier: Int] = [:]
@@ -147,17 +159,31 @@ final class Encoder {
 
     init(server: TCPServer) { self.server = server }
 
+    private(set) var usingHEVC = false
+
     private func makeSession(width: Int32, height: Int32) {
         var s: VTCompressionSession?
-        VTCompressionSessionCreate(
-            allocator: nil, width: width, height: height,
-            codecType: kCMVideoCodecType_H264,
-            encoderSpecification: nil, imageBufferAttributes: nil,
-            compressedDataAllocator: nil, outputCallback: nil, refcon: nil,
-            compressionSessionOut: &s)
+        if CODEC == "hevc" {
+            VTCompressionSessionCreate(
+                allocator: nil, width: width, height: height,
+                codecType: kCMVideoCodecType_HEVC,
+                encoderSpecification: nil, imageBufferAttributes: nil,
+                compressedDataAllocator: nil, outputCallback: nil, refcon: nil,
+                compressionSessionOut: &s)
+            if s != nil { usingHEVC = true } else { NSLog("HEVC encoder unavailable — falling back to H.264") }
+        }
+        if s == nil {
+            VTCompressionSessionCreate(
+                allocator: nil, width: width, height: height,
+                codecType: kCMVideoCodecType_H264,
+                encoderSpecification: nil, imageBufferAttributes: nil,
+                compressedDataAllocator: nil, outputCallback: nil, refcon: nil,
+                compressionSessionOut: &s)
+        }
         guard let s else { fatalError("VTCompressionSessionCreate failed") }
         VTSessionSetProperty(s, key: kVTCompressionPropertyKey_RealTime, value: kCFBooleanTrue)
-        VTSessionSetProperty(s, key: kVTCompressionPropertyKey_ProfileLevel, value: kVTProfileLevel_H264_Main_AutoLevel)
+        VTSessionSetProperty(s, key: kVTCompressionPropertyKey_ProfileLevel,
+                             value: usingHEVC ? kVTProfileLevel_HEVC_Main_AutoLevel : kVTProfileLevel_H264_Main_AutoLevel)
         VTSessionSetProperty(s, key: kVTCompressionPropertyKey_AllowFrameReordering, value: kCFBooleanFalse)
         VTSessionSetProperty(s, key: kVTCompressionPropertyKey_MaxKeyFrameInterval, value: NSNumber(value: FPS))
         VTSessionSetProperty(s, key: kVTCompressionPropertyKey_AverageBitRate, value: NSNumber(value: BITRATE))
@@ -191,17 +217,16 @@ final class Encoder {
         let startCode: [UInt8] = [0, 0, 0, 1]
 
         if isKey {
+            // identical signatures; HEVC yields 3 sets (VPS/SPS/PPS), H.264 yields 2 (SPS/PPS)
+            let getPS = usingHEVC ? CMVideoFormatDescriptionGetHEVCParameterSetAtIndex
+                                  : CMVideoFormatDescriptionGetH264ParameterSetAtIndex
             var psCount = 0
-            CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
-                fmt, parameterSetIndex: 0, parameterSetPointerOut: nil, parameterSetSizeOut: nil,
-                parameterSetCountOut: &psCount, nalUnitHeaderLengthOut: nil)
+            _ = getPS(fmt, 0, nil, nil, &psCount, nil)
             var header = Data()
             for i in 0..<psCount {
                 var ptr: UnsafePointer<UInt8>?
                 var size = 0
-                CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
-                    fmt, parameterSetIndex: i, parameterSetPointerOut: &ptr, parameterSetSizeOut: &size,
-                    parameterSetCountOut: nil, nalUnitHeaderLengthOut: nil)
+                _ = getPS(fmt, i, &ptr, &size, nil, nil)
                 if let ptr {
                     header.append(contentsOf: startCode)
                     header.append(ptr, count: size)
@@ -245,6 +270,22 @@ final class StreamOutput: NSObject, SCStreamOutput, SCStreamDelegate {
         NSLog("stream stopped: \(error.localizedDescription)")
         exit(1)
     }
+}
+
+// --- touch input (phone finger -> Mac cursor on the virtual display) ---
+var vdispID: CGDirectDisplayID = 0  // 0 = no virtual display (window mode) -> touch ignored
+
+func handleTouch(_ d: Data) {
+    guard vdispID != 0 else { return }
+    let type = Int(d[d.startIndex])
+    guard type < 3 else { return }
+    let nx = Double(UInt16(d[d.startIndex + 1]) << 8 | UInt16(d[d.startIndex + 2])) / 65535.0
+    let ny = Double(UInt16(d[d.startIndex + 3]) << 8 | UInt16(d[d.startIndex + 4])) / 65535.0
+    let b = CGDisplayBounds(vdispID)  // per event: tracks display rearrangement
+    let pt = CGPoint(x: b.origin.x + nx * b.width, y: b.origin.y + ny * b.height)
+    let mouseType: [CGEventType] = [.leftMouseDown, .leftMouseDragged, .leftMouseUp]
+    CGEvent(mouseEventSource: nil, mouseType: mouseType[type],
+            mouseCursorPosition: pt, mouseButton: .left)?.post(tap: .cghidEventTap)
 }
 
 // --- virtual display (display mode only) ---
@@ -316,8 +357,13 @@ Task {
             cfg.scalesToFit = true
             NSLog("mirroring window '\(win.title ?? "?")' of \(win.owningApplication?.applicationName ?? "?")")
         } else {
-            guard let vdispID = makeVirtualDisplay() else { NSLog("virtual display creation failed"); exit(1) }
+            guard let newID = makeVirtualDisplay() else { NSLog("virtual display creation failed"); exit(1) }
+            vdispID = newID
             NSLog("virtual display 'AEasy Display' id=\(vdispID) for phone \(pxW)x\(pxH)")
+            if !AXIsProcessTrusted() {
+                NSLog("touch input needs Accessibility: System Settings > Privacy & Security > Accessibility > add aeasy-server (re-grant after every rebuild)")
+                AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary)
+            }
             var display: SCDisplay?
             for _ in 0..<10 {  // virtual display can take a moment to appear
                 let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)

@@ -92,6 +92,8 @@ aeasy start     # start everything (aliased as `aez`)
 | `aeasy screen` | Back to extended-display mode. |
 | `aeasy config` | Open the settings GUI (frame rate, bitrate, resolution, mode). |
 | `aeasy tune` | One-shot low-latency preset (15fps / 60% resolution) for slower phones. |
+| `aeasy wifi` | Switch to **wireless mode** — plug the cable once to enable, then unplug and roam. |
+| `aeasy usb` | Back to USB mode. |
 | `aeasy restart` | Restart the virtual display. |
 | `aeasy install-app` | Install the bundled APK onto the phone. |
 | `aeasy log` | Tail the server log. |
@@ -114,6 +116,19 @@ Hold the phone upright and the Mac gets a **portrait** display; turn it sideways
                                      └─────────┘
 ```
 
+### Touch input
+
+Touch the phone and the Mac cursor follows — tap to click, drag to move windows. The phone becomes a small **touchscreen monitor**. Needs the **Accessibility** permission for `aeasy-server` (System Settings → Privacy & Security → Accessibility); the server prompts and logs a hint on first run. Note: rebuilding (`make build`) invalidates the grant, so re-toggle it after an update. Video works fine without the permission — only touch needs it. Extended-display mode only; scrolling and multi-finger gestures are not supported.
+
+### Wireless mode
+
+```sh
+aeasy wifi     # cable plugged in: enables Wi-Fi adb, then you can unplug
+aeasy usb      # back to the cable
+```
+
+The stream runs over `adb connect` on your Wi-Fi network — same commands, same auto-rotation. If the connection drops (phone slept, network blip), the watcher reconnects automatically. USB still has the lowest latency; wireless trades a bit of it for freedom from the cable.
+
 ### Mirror a single window
 
 ```sh
@@ -130,10 +145,12 @@ If the app has several windows, the largest on-screen one is used. If no matchin
 | Key | Default | Meaning |
 |---|---|---|
 | `FPS` | `20` | Capture/encode frame rate (10–30). Lower = less latency on slow phones. |
-| `BITRATE` | `2000000` | H.264 bitrate in bps. |
+| `BITRATE` | `2000000` | Video bitrate in bps. |
 | `SCALE` | `80` | Encode resolution as % of the phone panel. Lower = lighter decode. |
 | `MODE` | `display` | `display` (extended) or `window` (mirror one app). |
 | `WINDOW_APP` | – | App name to mirror when `MODE=window`. |
+| `CODEC` | `h264` | `h264` or `hevc`. HEVC looks better at the same bitrate; if your phone can't decode it (black screen), set back to `h264`. |
+| `WIFI_ADDR` | – | Set by `aeasy wifi`, cleared by `aeasy usb` — don't edit by hand. |
 
 Bigger text: System Settings → Displays → **AEasy Display** and pick a lower "looks like" resolution.
 

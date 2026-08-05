@@ -32,6 +32,7 @@ final class App: NSObject, NSApplicationDelegate {
     let bitrateLabel = NSTextField(labelWithString: "")
     let scaleLabel = NSTextField(labelWithString: "")
     let mode = NSPopUpButton(frame: .zero, pullsDown: false)
+    let codec = NSPopUpButton(frame: .zero, pullsDown: false)
     let appPick = NSPopUpButton(frame: .zero, pullsDown: false)
     let status = NSTextField(labelWithString: " ")
     var window: NSWindow!
@@ -43,6 +44,8 @@ final class App: NSObject, NSApplicationDelegate {
         scale.doubleValue = Double(c["SCALE"] ?? "") ?? 80
         mode.addItems(withTitles: ["Extended display", "Mirror one app window"])
         mode.selectItem(at: c["MODE"] == "window" ? 1 : 0)
+        codec.addItems(withTitles: ["H.264 (compatible)", "HEVC (better quality)"])
+        codec.selectItem(at: c["CODEC"] == "hevc" ? 1 : 0)
         appPick.addItems(withTitles: runningAppNames())
         if let sel = c["WINDOW_APP"], appPick.itemTitles.contains(sel) { appPick.selectItem(withTitle: sel) }
 
@@ -65,6 +68,7 @@ final class App: NSObject, NSApplicationDelegate {
             row("Bitrate", bitrate), row("", bitrateLabel),
             row("Resolution", scale), row("", scaleLabel),
             row("Mode", mode),
+            row("Codec", codec),
             row("App to mirror", appPick),
             save, status,
         ])
@@ -91,14 +95,15 @@ final class App: NSObject, NSApplicationDelegate {
     }
 
     @objc func saveTapped() {
-        let conf = """
-        FPS=\(Int(fps.doubleValue))
-        BITRATE=\(Int(bitrate.doubleValue * 1_000_000))
-        SCALE=\(Int(scale.doubleValue))
-        MODE=\(mode.indexOfSelectedItem == 1 ? "window" : "display")
-        WINDOW_APP=\(appPick.titleOfSelectedItem ?? "")
-        AUTO=0
-        """
+        var c = loadConf()  // preserve keys the GUI doesn't know about (WIFI_ADDR, CODEC, …)
+        c["FPS"] = "\(Int(fps.doubleValue))"
+        c["BITRATE"] = "\(Int(bitrate.doubleValue * 1_000_000))"
+        c["SCALE"] = "\(Int(scale.doubleValue))"
+        c["MODE"] = mode.indexOfSelectedItem == 1 ? "window" : "display"
+        c["CODEC"] = codec.indexOfSelectedItem == 1 ? "hevc" : "h264"
+        c["WINDOW_APP"] = appPick.titleOfSelectedItem ?? ""
+        c["AUTO"] = "0"
+        let conf = c.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "\n")
         try? FileManager.default.createDirectory(atPath: (cfgPath as NSString).deletingLastPathComponent,
                                                  withIntermediateDirectories: true)
         try? conf.write(toFile: cfgPath, atomically: true, encoding: .utf8)

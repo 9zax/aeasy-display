@@ -12,9 +12,9 @@
 | ฝั่งคอม | macOS เท่านั้น | Win / macOS / Linux | Win / macOS / Linux | Linux (X11) เท่านั้น | Win / macOS / Linux |
 | ฝั่งจอเสริม | Android (แอป viewer) | ทุกอย่างที่มี browser | ทุกอย่างที่มี browser | ทุกอย่างที่รับ VNC ได้ | Android / iOS / อื่น ๆ (แอป Moonlight) |
 | สร้าง virtual display ให้เอง | ✅ (`CGVirtualDisplay`) | ❌ ต้องมี dummy plug หรือทำ virtual display เอง | ⚠️ Linux เท่านั้น (macOS = มิเรอร์อย่างเดียว) | ✅ (xrandr) | ❌ ต้องมี dummy plug หรือ BetterDisplay ช่วย |
-| การเชื่อมต่อ | USB เท่านั้น (zero network) | Wi-Fi (WebRTC) | Wi-Fi (WebRTC/WebSocket) | Wi-Fi (VNC) | Wi-Fi / LAN (มี hw encode) |
+| การเชื่อมต่อ | USB (zero network) หรือ Wi-Fi (`aeasy wifi`) | Wi-Fi (WebRTC) | Wi-Fi (WebRTC/WebSocket) | Wi-Fi (VNC) | Wi-Fi / LAN (มี hw encode) |
 | ความหน่วง | ต่ำ (hw encode/decode ทั้งสาย) | ปานกลาง–สูง (software encode ผ่าน browser) | ปานกลาง (มี hw encode บางแพลตฟอร์ม) | สูง (VNC ไม่เหมาะกับวิดีโอ) | ต่ำมาก (ออกแบบมาเพื่อเกม) |
-| ส่ง input กลับ (touch/ปากกา) | ❌ | ❌ | ✅ จุดขายหลัก (stylus แรงกด — Linux เท่านั้น) | ✅ ผ่าน VNC | ✅ (เมาส์/คีย์/จอย) |
+| ส่ง input กลับ (touch/ปากกา) | ✅ แตะ+ลาก (ไม่มีแรงกดปากกา/scroll) | ❌ | ✅ จุดขายหลัก (stylus แรงกด — Linux เท่านั้น) | ✅ ผ่าน VNC | ✅ (เมาส์/คีย์/จอย) |
 | หมุนจออัตโนมัติ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | สถานะโปรเจกต์ | ใหม่ | active แต่ virtual display "อยู่ใน roadmap" มานาน | active | ⚠️ หยุดพัฒนา (commit สุดท้าย 2018) | active มาก ชุมชนใหญ่ |
 
@@ -37,7 +37,7 @@
 - **ด้อย**: เป็น game-streaming ไม่ใช่เครื่องมือจอเสริม — บน macOS ต้องหา virtual display เองด้วย dummy plug หรือ [BetterDisplay](https://github.com/waydabber/BetterDisplay) (freemium) แล้วชี้ Sunshine ให้สตรีมจอนั้น, setup หลายชิ้น, ผ่านเครือข่าย
 
 ### จุดยืนของ AEasy Display ในกลุ่มนี้
-เป็นตัวเดียวที่ **"จอเสริม macOS → Android ผ่านสาย USB จบในคำสั่งเดียว"** — สร้าง virtual display เอง, hw encode/decode ตลอดสาย, ไม่ใช้เครือข่าย, หมุนจอตามเครื่อง แลกกับการที่รองรับแค่ macOS+Android, USB เท่านั้น และไม่มีการส่ง touch กลับ
+เป็นตัวเดียวที่ **"จอเสริม macOS → Android ผ่านสาย USB จบในคำสั่งเดียว"** — สร้าง virtual display เอง, hw encode/decode ตลอดสาย, ไม่ใช้เครือข่าย, หมุนจอตามเครื่อง แลกกับการที่รองรับแค่ macOS+Android, ไม่มีเสียง และยังไม่รองรับ scroll/หลายนิ้ว
 
 ---
 
@@ -58,10 +58,10 @@
 | โจทย์หลัก | เพิ่มพื้นที่หน้าจอให้ Mac | ดู/ควบคุมมือถือจากคอม |
 | แพลตฟอร์มฝั่งคอม | macOS 13+ เท่านั้น | Windows / macOS / Linux |
 | ฝั่งมือถือ | ต้องติดตั้งแอป viewer (APK) | ไม่ต้องลงแอป (push server ผ่าน adb อัตโนมัติ) |
-| การเชื่อมต่อ | USB เท่านั้น (`adb reverse`) | USB หรือ Wi-Fi (TCP/IP) |
+| การเชื่อมต่อ | USB (`adb reverse`) หรือ Wi-Fi (`aeasy wifi`) | USB หรือ Wi-Fi (TCP/IP) |
 | เสียง | ไม่มี | มี (Android 11+, forward เสียงมาที่คอม) |
-| ควบคุมอีกฝั่งได้ไหม | ไม่ได้ (มือถือเป็นจอแสดงผลอย่างเดียว) | ได้เต็มรูปแบบ (เมาส์ คีย์บอร์ด clipboard ลากไฟล์) |
-| วิดีโอ | H.264 hardware encode/decode | H.264 / H.265 / AV1 |
+| ควบคุมอีกฝั่งได้ไหม | touch: แตะ+ลากขยับเคอร์เซอร์ Mac ได้ | ได้เต็มรูปแบบ (เมาส์ คีย์บอร์ด clipboard ลากไฟล์) |
+| วิดีโอ | H.264 / HEVC hardware encode/decode | H.264 / H.265 / AV1 |
 | ความเสถียร/วุฒิภาวะ | โปรเจกต์ใหม่ ขนาดเล็ก | ใช้กันมานาน ชุมชนใหญ่ (100k+ stars) |
 
 ## จุดเด่น AEasy Display
@@ -78,8 +78,7 @@
 - macOS เท่านั้น — ไม่มี Windows/Linux
 - ต้อง build/ติดตั้ง APK ลงมือถือก่อน
 - ไม่มีเสียง (จอเสริมส่วนใหญ่ไม่จำเป็น แต่ scrcpy มี)
-- USB เท่านั้น — ไม่มีโหมด wireless
-- เฟรมเรตเพดาน 30fps, codec มีแค่ H.264
+- เฟรมเรตเพดาน 30fps
 - โปรเจกต์ใหม่ — ecosystem/เอกสาร/การทดสอบยังเทียบ scrcpy ไม่ได้
 
 ## จุดเด่น scrcpy

@@ -12,9 +12,9 @@ Compared against the closest open source projects: [scrcpy](https://github.com/G
 | Computer side | macOS only | Win / macOS / Linux | Win / macOS / Linux | Linux (X11) only | Win / macOS / Linux |
 | Display side | Android (viewer app) | anything with a browser | anything with a browser | anything with a VNC client | Android / iOS / more (Moonlight app) |
 | Creates the virtual display for you | ✅ (`CGVirtualDisplay`) | ❌ needs a dummy plug or DIY virtual display | ⚠️ Linux only (macOS = mirror only) | ✅ (xrandr) | ❌ needs a dummy plug or BetterDisplay |
-| Transport | USB only (zero network) | Wi-Fi (WebRTC) | Wi-Fi (WebRTC/WebSocket) | Wi-Fi (VNC) | Wi-Fi / LAN (hw encode) |
+| Transport | USB (zero network) or Wi-Fi (`aeasy wifi`) | Wi-Fi (WebRTC) | Wi-Fi (WebRTC/WebSocket) | Wi-Fi (VNC) | Wi-Fi / LAN (hw encode) |
 | Latency | low (hw encode/decode end to end) | medium–high (software encode via browser) | medium (hw encode on some platforms) | high (VNC isn't built for video) | very low (built for game streaming) |
-| Input back (touch/stylus) | ❌ | ❌ | ✅ its main selling point (pressure stylus — Linux only) | ✅ via VNC | ✅ (mouse/keyboard/gamepad) |
+| Input back (touch/stylus) | ✅ tap + drag (no stylus pressure/scroll) | ❌ | ✅ its main selling point (pressure stylus — Linux only) | ✅ via VNC | ✅ (mouse/keyboard/gamepad) |
 | Auto-rotation | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Project status | new | active, but virtual display has been "on the roadmap" for years | active | ⚠️ abandoned (last commit 2018) | very active, large community |
 
@@ -37,7 +37,7 @@ Compared against the closest open source projects: [scrcpy](https://github.com/G
 - **Weaknesses**: it's game streaming, not a second-display tool — on macOS you must supply the virtual display yourself with a dummy plug or [BetterDisplay](https://github.com/waydabber/BetterDisplay) (freemium) and point Sunshine at it; multiple moving parts; runs over the network.
 
 ### Where AEasy Display fits
-The only one that does **"macOS → Android second display over a USB cable, in one command"** — creates its own virtual display, hardware encode/decode end to end, zero network, and the display rotates with the phone. The trade-off: macOS+Android only, USB only, and no touch input back.
+The only one that does **"macOS → Android second display over a USB cable, in one command"** — creates its own virtual display, hardware encode/decode end to end, zero network, and the display rotates with the phone. The trade-off: macOS+Android only, no audio, no scroll/multi-finger gestures.
 
 ---
 
@@ -58,10 +58,10 @@ The only one that does **"macOS → Android second display over a USB cable, in 
 | Core job | more screen space for the Mac | view/control the phone from a computer |
 | Computer side | macOS 13+ only | Windows / macOS / Linux |
 | Phone side | viewer app required (APK) | no app needed (server pushed via adb automatically) |
-| Transport | USB only (`adb reverse`) | USB or Wi-Fi (TCP/IP) |
+| Transport | USB (`adb reverse`) or Wi-Fi (`aeasy wifi`) | USB or Wi-Fi (TCP/IP) |
 | Audio | none | yes (Android 11+, forwarded to the computer) |
-| Control the other side? | no (the phone is display-only) | full control (mouse, keyboard, clipboard, drag-and-drop files) |
-| Video | H.264 hardware encode/decode | H.264 / H.265 / AV1 |
+| Control the other side? | touch: tap + drag drive the Mac cursor | full control (mouse, keyboard, clipboard, drag-and-drop files) |
+| Video | H.264 / HEVC hardware encode/decode | H.264 / H.265 / AV1 |
 | Maturity | new, small project | battle-tested, huge community (100k+ stars) |
 
 ## AEasy Display strengths
@@ -78,8 +78,7 @@ The only one that does **"macOS → Android second display over a USB cable, in 
 - macOS only — no Windows/Linux
 - requires building/installing an APK on the phone first
 - no audio (rarely needed for a second display, but scrcpy has it)
-- USB only — no wireless mode
-- 30fps ceiling, H.264 only
+- 30fps ceiling
 - young project — ecosystem/docs/testing can't compare to scrcpy yet
 
 ## scrcpy strengths

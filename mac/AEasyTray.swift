@@ -17,8 +17,8 @@ func shell(_ cmd: String) -> Int32 {
 
 // bracket pattern so pgrep doesn't match our own `zsh -c` wrapper
 func serverRunning() -> Bool { shell("pgrep -qf 'aeasy-serve[r]'") == 0 }
-func cablePlugged() -> Bool {
-    shell("export PATH=/opt/homebrew/bin:$PATH; [[ \"$(adb get-state 2>/dev/null)\" == device ]]") == 0
+func cablePlugged() -> Bool {  // USB or wireless adb — any online device counts
+    shell("export PATH=/opt/homebrew/bin:$PATH; adb devices 2>/dev/null | grep -q 'device$'") == 0
 }
 
 final class Tray: NSObject, NSApplicationDelegate, NSMenuDelegate {
@@ -60,7 +60,7 @@ final class Tray: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let running = serverRunning(), plugged = cablePlugged()
             DispatchQueue.main.async {
                 self.statusLine.title =
-                    (plugged ? "🔌 Cable: connected" : "🔌 Cable: not connected")
+                    (plugged ? "📱 Phone: connected" : "📱 Phone: not connected")
                     + (running ? "  ·  🖥 running" : "  ·  🖥 stopped")
             }
         }

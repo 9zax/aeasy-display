@@ -9,6 +9,12 @@ CFG="$SHARE/config"
 LOG="$SHARE/server.log"
 APP=dev.ctz.usbdisplay
 
+# route every adb call to the wireless device when WIFI_ADDR is set (aeasy wifi)
+adb() {
+  local w=$(grep -m1 '^WIFI_ADDR=' "$CFG" 2>/dev/null | cut -d= -f2)
+  command adb ${w:+-s "$w"} "$@"
+}
+
 plugged() { [[ "$(adb get-state 2>/dev/null)" == "device" ]] }
 warn_unplugged() { echo "⚠️  No phone plugged in (USB-C) — connect the cable and try again" >&2 }
 
@@ -52,8 +58,11 @@ watch_loop() {
         fi
       fi
     else
-      # cable unplugged → tear down the virtual display until it's back
-      pgrep -qf aeasy-server && pkill -f aeasy-server
+      # wireless mode: try to reconnect before giving up this tick
+      local w=$(grep -m1 '^WIFI_ADDR=' "$CFG" 2>/dev/null | cut -d= -f2)
+      [[ -n "$w" ]] && command adb connect "$w" >/dev/null 2>&1
+      # phone gone → tear down the virtual display until it's back
+      plugged || { pgrep -qf aeasy-server && pkill -f aeasy-server }
     fi
     sleep 2
   done
@@ -97,7 +106,12 @@ case "${1:-start}" in
     echo "🖥  Extended-display mode"
     ;;
   status)
-    if plugged; then echo "🔌 Cable: connected ($(adb shell getprop ro.product.model 2>/dev/null))"; else echo "🔌 Cable: not connected"; fi
+    W=$(grep -m1 '^WIFI_ADDR=' "$CFG" 2>/dev/null | cut -d= -f2)
+    if [[ -n "$W" ]]; then
+      if plugged; then echo "📶 Wireless: connected $W ($(adb shell getprop ro.product.model 2>/dev/null))"; else echo "📶 Wireless: not connected ($W)"; fi
+    else
+      if plugged; then echo "🔌 Cable: connected ($(adb shell getprop ro.product.model 2>/dev/null))"; else echo "🔌 Cable: not connected"; fi
+    fi
     pgrep -qf aeasy-server && echo "🖥  Server: running" || echo "🖥  Server: stopped"
     if grep -q 'LAGGY' "$LOG" 2>/dev/null; then
       echo "🐢 Lag was detected (phone decoder falling behind) — recommended: aeasy tune"
@@ -117,6 +131,24 @@ case "${1:-start}" in
     echo "⚡ Low-latency preset: 15fps / 1.5Mbps / 60% resolution (good for budget phones)"
     echo "   fine-tune: aeasy config"
     if plugged; then server_start; sleep 1; app_open; fi
+    ;;
+  wifi)
+    if [[ "$(command adb -d get-state 2>/dev/null)" != "device" ]]; then
+      echo "⚠️  Plug in the USB cable first — it's only needed once to enable Wi-Fi mode" >&2; exit 1
+    fi
+    command adb -d tcpip 5555 >/dev/null; sleep 1
+    IP=$(command adb -d shell ip route 2>/dev/null | awk '/wlan/ {print $9; exit}')
+    if [[ -z "$IP" ]]; then echo "⚠️  Couldn't find the phone's IP — is it on Wi-Fi?" >&2; exit 1; fi
+    command adb connect "$IP:5555" >/dev/null || { echo "⚠️  adb connect $IP:5555 failed" >&2; exit 1; }
+    mkdir -p "$SHARE"
+    { grep -vE '^WIFI_ADDR=' "$CFG" 2>/dev/null; echo "WIFI_ADDR=$IP:5555"; } > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
+    echo "📶 Wireless mode on ($IP:5555) — you can unplug the cable now (back to USB: aeasy usb)"
+    ;;
+  usb)
+    W=$(grep -m1 '^WIFI_ADDR=' "$CFG" 2>/dev/null | cut -d= -f2)
+    [[ -n "$W" ]] && command adb disconnect "$W" >/dev/null 2>&1
+    { grep -vE '^WIFI_ADDR=' "$CFG" 2>/dev/null; } > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
+    echo "🔌 Back to USB mode"
     ;;
   install-app)
     if ! plugged; then warn_unplugged; exit 1; fi
@@ -141,6 +173,8 @@ aeasy — ใช้มือถือ Android เป็นจอเสริม�
   aeasy screen         กลับเป็นโหมดจอเสริมเต็มจอ
   aeasy config         เปิดหน้าต่างตั้งค่า (fps / bitrate / ความละเอียด / โหมด)
   aeasy tune           ตั้งค่าโหมดลื่นสำหรับมือถือช้า (15fps / 60%) — ใช้เมื่อภาพหน่วง
+  aeasy wifi           เปลี่ยนเป็นโหมดไร้สาย (เสียบสายครั้งเดียวตอนเปิดใช้ แล้วถอดได้เลย)
+  aeasy usb            กลับมาใช้สาย USB
   aeasy restart        รีสตาร์ทจอเสมือน
   aeasy install-app    ติดตั้ง APK ลงมือถือ
   aeasy log            ดู log ล่าสุดของเซิร์ฟเวอร์
@@ -157,6 +191,8 @@ aeasy — use an Android phone as a second display for your Mac over USB-C (alia
   aeasy screen         back to full extended-display mode
   aeasy config         open the settings GUI (fps / bitrate / resolution / mode)
   aeasy tune           low-latency preset for slower phones (15fps / 60%) — use when laggy
+  aeasy wifi           switch to wireless mode (cable needed once to enable, then unplug)
+  aeasy usb            switch back to USB mode
   aeasy restart        restart the virtual display
   aeasy install-app    install the APK onto the phone
   aeasy log            tail the server log
