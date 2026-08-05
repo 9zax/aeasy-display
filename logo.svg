@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1E1B4B"/>
+      <stop offset="1" stop-color="#0F172A"/>
+    </linearGradient>
+    <!-- one gradient shared by both screens: the desktop "extends" across devices -->
+    <linearGradient id="aurora" x1="108" y1="150" x2="430" y2="370" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6366F1"/>
+      <stop offset="0.45" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+  <rect x="1.5" y="1.5" width="509" height="509" rx="114.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="3"/>
+
+  <!-- screen glow -->
+  <g filter="url(#glow)" opacity="0.65">
+    <rect x="108" y="144" width="208" height="132" rx="6" fill="url(#aurora)"/>
+    <rect x="340" y="186" width="90" height="190" rx="14" fill="url(#aurora)"/>
+  </g>
+
+  <!-- cable: laptop → phone -->
+  <path d="M212,304 C212,368 300,402 340,402 C368,402 386,400 386,388" fill="none" stroke="#475569" stroke-width="9" stroke-linecap="round"/>
+  <circle cx="238" cy="382" r="4.5" fill="#22D3EE"/>
+  <circle cx="304" cy="399" r="4.5" fill="#22D3EE"/>
+  <rect x="378" y="380" width="16" height="12" rx="4" fill="#64748B"/>
+
+  <!-- MacBook -->
+  <rect x="96" y="132" width="232" height="156" rx="14" fill="#E2E8F0"/>
+  <rect x="108" y="144" width="208" height="132" rx="6" fill="url(#aurora)"/>
+  <rect x="76" y="288" width="272" height="16" rx="8" fill="#CBD5E1"/>
+  <rect x="190" y="288" width="44" height="7" rx="3.5" fill="#94A3B8"/>
+
+  <!-- phone, standing in front -->
+  <rect x="330" y="176" width="110" height="210" rx="22" fill="#E2E8F0"/>
+  <rect x="340" y="186" width="90" height="190" rx="14" fill="url(#aurora)"/>
+  <circle cx="385" cy="198" r="3.5" fill="#0F172A" fill-opacity="0.55"/>
+</svg>

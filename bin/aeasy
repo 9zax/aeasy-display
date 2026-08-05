@@ -1,0 +1,162 @@
+#!/bin/zsh
+# aeasy — ใช้มือถือ Android เป็นจอเสริม/จอ mirror ของ Mac ผ่านสาย USB-C
+export PATH="/opt/homebrew/bin:$HOME/.local/bin:$PATH"  # nohup'd watcher has no shell profile
+SHARE="$HOME/.local/share/aeasy"
+SERVER="$SHARE/aeasy-server"
+CONFIGAPP="$SHARE/aeasy-config"
+APK="$SHARE/app-debug.apk"
+CFG="$SHARE/config"
+LOG="$SHARE/server.log"
+APP=dev.ctz.usbdisplay
+
+plugged() { [[ "$(adb get-state 2>/dev/null)" == "device" ]] }
+warn_unplugged() { echo "⚠️  No phone plugged in (USB-C) — connect the cable and try again" >&2 }
+
+phone_rotation() { adb shell dumpsys display 2>/dev/null | grep -oEm1 'rotation [0-3]' | grep -oE '[0-3]' | head -1; }
+
+phone_dims() {  # echoes "W H" matching current phone rotation
+  local size=$(adb shell wm size | head -1 | awk '{print $3}')   # e.g. 720x1650
+  local a=${size%x*} b=${size#*x}
+  local small=$(( a < b ? a : b )) big=$(( a < b ? b : a ))
+  local rot=$(phone_rotation)
+  if [[ "$rot" == 0 || "$rot" == 2 ]]; then echo "$small $big"; else echo "$big $small"; fi
+}
+
+server_start() {
+  pkill -f aeasy-server 2>/dev/null
+  local dims=($(phone_dims))
+  echo "${dims[1]} ${dims[2]}" > "$SHARE/dims"
+  "$SERVER" ${dims[1]} ${dims[2]} >>"$LOG" 2>&1 &!
+  echo "🖥  Virtual display up ${dims[1]}x${dims[2]}"
+}
+
+app_open() {
+  adb reverse tcp:7355 tcp:7355 >/dev/null 2>&1
+  adb shell "pidof $APP >/dev/null || am start -n $APP/.MainActivity" >/dev/null 2>&1
+}
+
+watch_loop() {
+  while true; do
+    if plugged; then
+      pgrep -qf aeasy-server || server_start
+      app_open
+      # rotate the virtual display only while our app is the focused one
+      if adb shell dumpsys window 2>/dev/null | grep -m1 mCurrentFocus | grep -q "$APP"; then
+        local cur=$(phone_dims)
+        if [[ -n "$cur" && "$cur" != "$(cat "$SHARE/dims" 2>/dev/null)" ]]; then
+          server_start
+        fi
+      fi
+    fi
+    sleep 2
+  done
+}
+
+case "${1:-start}" in
+  start)
+    if ! plugged; then warn_unplugged; exit 1; fi
+    server_start
+    sleep 1
+    app_open
+    pgrep -qf "aeasy _watch" || (nohup zsh "$0" _watch >/dev/null 2>&1 &!)
+    echo "✅ Running — plug, unplug, or rotate freely (stop: aeasy stop)"
+    ;;
+  stop)
+    pkill -f "aeasy _watch" 2>/dev/null
+    pkill -f aeasy-server 2>/dev/null
+    echo "⏹  Stopped"
+    ;;
+  restart)
+    if ! plugged; then warn_unplugged; exit 1; fi
+    server_start; sleep 1; app_open
+    ;;
+  app)
+    if ! plugged; then warn_unplugged; exit 1; fi
+    app_open && echo "📱 Viewer app launched on the phone"
+    ;;
+  mirror)
+    if [[ -z "$2" ]]; then echo "usage: aeasy mirror <AppName>   e.g. aeasy mirror Safari"; exit 1; fi
+    if ! plugged; then warn_unplugged; exit 1; fi
+    mkdir -p "$SHARE"
+    { grep -vE '^(MODE|WINDOW_APP)=' "$CFG" 2>/dev/null; echo "MODE=window"; echo "WINDOW_APP=$2"; } > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
+    server_start; sleep 1; app_open
+    echo "🪞 Mirroring '$2' to the phone (back to extended: aeasy screen)"
+    ;;
+  screen)
+    mkdir -p "$SHARE"
+    { grep -vE '^(MODE|WINDOW_APP)=' "$CFG" 2>/dev/null; echo "MODE=display"; } > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
+    if plugged; then server_start; sleep 1; app_open; fi
+    echo "🖥  Extended-display mode"
+    ;;
+  status)
+    if plugged; then echo "🔌 Cable: connected ($(adb shell getprop ro.product.model 2>/dev/null))"; else echo "🔌 Cable: not connected"; fi
+    pgrep -qf aeasy-server && echo "🖥  Server: running" || echo "🖥  Server: stopped"
+    if grep -q 'LAGGY' "$LOG" 2>/dev/null; then
+      echo "🐢 Lag was detected (phone decoder falling behind) — recommended: aeasy tune"
+    fi
+    pgrep -qf "aeasy _watch" && echo "👀 Watcher: running" || echo "👀 Watcher: stopped"
+    plugged && { adb shell pidof $APP >/dev/null 2>&1 && echo "📱 Phone app: open" || echo "📱 Phone app: closed"; }
+    [[ -f "$CFG" ]] && { echo "⚙️  config:"; sed 's/^/    /' "$CFG"; }
+    true
+    ;;
+  config|--config)
+    "$CONFIGAPP" &!
+    echo "⚙️  Settings window opened"
+    ;;
+  tune)
+    mkdir -p "$SHARE"
+    { grep -vE '^(FPS|BITRATE|SCALE|AUTO)=' "$CFG" 2>/dev/null; echo "FPS=15"; echo "BITRATE=1500000"; echo "SCALE=60"; echo "AUTO=0"; } > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
+    echo "⚡ Low-latency preset: 15fps / 1.5Mbps / 60% resolution (good for budget phones)"
+    echo "   fine-tune: aeasy config"
+    if plugged; then server_start; sleep 1; app_open; fi
+    ;;
+  install-app)
+    if ! plugged; then warn_unplugged; exit 1; fi
+    adb install -r "$APK" && echo "📱 App installed on the phone"
+    ;;
+  log)
+    tail -20 "$LOG"
+    ;;
+  _watch)
+    watch_loop
+    ;;
+  help|--help|-h)
+    if [[ "$2" == "--th" || "$2" == "th" ]]; then
+      cat <<'EOF'
+aeasy — ใช้มือถือ Android เป็นจอเสริมของ Mac ผ่านสาย USB-C (alias: aez)
+
+  aeasy start          เริ่มจอเสริม + เฝ้าสายอัตโนมัติ (เสียบสายปุ๊บแอปเด้งเอง, หมุนเครื่องได้)
+  aeasy stop           หยุดทั้งหมด
+  aeasy status         ดูสถานะ สาย / เซิร์ฟเวอร์ / แอปมือถือ / config
+  aeasy app            เปิดแอปบนมือถือ (แจ้งเตือนถ้าไม่ได้เสียบสาย)
+  aeasy mirror <แอพ>   mirror เฉพาะหน้าต่างแอพเดียว เช่น: aeasy mirror Safari
+  aeasy screen         กลับเป็นโหมดจอเสริมเต็มจอ
+  aeasy config         เปิดหน้าต่างตั้งค่า (fps / bitrate / ความละเอียด / โหมด)
+  aeasy tune           ตั้งค่าโหมดลื่นสำหรับมือถือช้า (15fps / 60%) — ใช้เมื่อภาพหน่วง
+  aeasy restart        รีสตาร์ทจอเสมือน
+  aeasy install-app    ติดตั้ง APK ลงมือถือ
+  aeasy log            ดู log ล่าสุดของเซิร์ฟเวอร์
+EOF
+    else
+      cat <<'EOF'
+aeasy — use an Android phone as a second display for your Mac over USB-C (alias: aez)
+
+  aeasy start          start the display + cable watcher (auto-launches the phone app, auto-rotates)
+  aeasy stop           stop everything
+  aeasy status         show cable / server / phone-app status and config
+  aeasy app            launch the viewer app on the phone (warns if unplugged)
+  aeasy mirror <App>   mirror a single app window, e.g.: aeasy mirror Safari
+  aeasy screen         back to full extended-display mode
+  aeasy config         open the settings GUI (fps / bitrate / resolution / mode)
+  aeasy tune           low-latency preset for slower phones (15fps / 60%) — use when laggy
+  aeasy restart        restart the virtual display
+  aeasy install-app    install the APK onto the phone
+  aeasy log            tail the server log
+
+  aeasy --help --th    แสดงเป็นภาษาไทย
+EOF
+    fi
+    ;;
+  *)
+    echo "unknown command: $1 (see aeasy --help)"; exit 1 ;;
+esac

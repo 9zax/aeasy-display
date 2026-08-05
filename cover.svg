@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080" width="1080" height="1080">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1080" y2="1080" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1E1B4B"/>
+      <stop offset="1" stop-color="#0F172A"/>
+    </linearGradient>
+    <linearGradient id="aurora" x1="300" y1="330" x2="820" y2="640" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6366F1"/>
+      <stop offset="0.45" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="28"/>
+    </filter>
+  </defs>
+
+  <rect width="1080" height="1080" fill="url(#bg)"/>
+
+  <!-- headline -->
+  <text x="540" y="150" text-anchor="middle" font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif" font-size="58" font-weight="700" fill="#F1F5F9">Your old Android isn't junk 📱</text>
+  <text x="540" y="230" text-anchor="middle" font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif" font-size="44" font-weight="500" fill="#A5B4FC">One cable. Second display for your Mac.</text>
+
+  <!-- screen glow -->
+  <g filter="url(#glow)" opacity="0.65">
+    <rect x="300" y="360" width="420" height="266" rx="12" fill="url(#aurora)"/>
+    <rect x="762" y="444" width="182" height="384" rx="28" fill="url(#aurora)"/>
+  </g>
+
+  <!-- cable: laptop → phone -->
+  <path d="M510,682 C510,810 688,878 768,878 C824,878 860,874 860,850" fill="none" stroke="#475569" stroke-width="18" stroke-linecap="round"/>
+  <circle cx="562" cy="838" r="9" fill="#22D3EE"/>
+  <circle cx="696" cy="872" r="9" fill="#22D3EE"/>
+  <rect x="844" y="834" width="32" height="24" rx="8" fill="#64748B"/>
+
+  <!-- MacBook -->
+  <rect x="276" y="336" width="468" height="314" rx="28" fill="#E2E8F0"/>
+  <rect x="300" y="360" width="420" height="266" rx="12" fill="url(#aurora)"/>
+  <rect x="236" y="650" width="548" height="32" rx="16" fill="#CBD5E1"/>
+  <rect x="466" y="650" width="88" height="14" rx="7" fill="#94A3B8"/>
+
+  <!-- phone, standing in front -->
+  <rect x="742" y="424" width="222" height="424" rx="44" fill="#E2E8F0"/>
+  <rect x="762" y="444" width="182" height="384" rx="28" fill="url(#aurora)"/>
+  <circle cx="853" cy="468" r="7" fill="#0F172A" fill-opacity="0.55"/>
+
+  <!-- footer -->
+  <text x="540" y="960" text-anchor="middle" font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif" font-size="64" font-weight="800" fill="#F1F5F9">AEasy Display</text>
+  <text x="540" y="1020" text-anchor="middle" font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif" font-size="34" font-weight="500" fill="#94A3B8">Free · Open source · No Wi-Fi needed · Just a USB-C cable 🔌</text>
+</svg>

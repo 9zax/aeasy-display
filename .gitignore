@@ -1,0 +1,7 @@
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+mac/aeasy-server
+mac/aeasy-config
+.DS_Store

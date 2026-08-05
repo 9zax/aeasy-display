@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- big display -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M28,36 h34 a4,4 0 0 1 4,4 v20 a4,4 0 0 1 -4,4 h-34 a4,4 0 0 1 -4,-4 v-20 a4,4 0 0 1 4,-4 z"/>
+    <path android:fillColor="#FF22D3EE"
+        android:pathData="M31,40 h28 a1,1 0 0 1 1,1 v14 a1,1 0 0 1 -1,1 h-28 a1,1 0 0 1 -1,-1 v-14 a1,1 0 0 1 1,-1 z"/>
+    <!-- display stand -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M42,64 h6 v4 h5 v3 h-16 v-3 h5 z"/>
+    <!-- phone backing (gap ring against the display) -->
+    <path android:fillColor="#FF4338CA"
+        android:pathData="M60,42 h20 a5,5 0 0 1 5,5 v26 a5,5 0 0 1 -5,5 h-20 a5,5 0 0 1 -5,-5 v-26 a5,5 0 0 1 5,-5 z"/>
+    <!-- phone -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M62,44 h16 a4,4 0 0 1 4,4 v24 a4,4 0 0 1 -4,4 h-16 a4,4 0 0 1 -4,-4 v-24 a4,4 0 0 1 4,-4 z"/>
+    <path android:fillColor="#FF22D3EE"
+        android:pathData="M62,49 h16 v18 h-16 z"/>
+    <!-- phone speaker + home dot -->
+    <path android:fillColor="#FF94A3B8" android:pathData="M66,46 h8 v1.6 h-8 z"/>
+    <path android:fillColor="#FF94A3B8" android:pathData="M69,69.6 a1.4,1.4 0 1 0 2.8,0 a1.4,1.4 0 1 0 -2.8,0 z"/>
+</vector>
