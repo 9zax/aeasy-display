@@ -1,73 +1,204 @@
 #!/bin/zsh
 # aeasy — ใช้มือถือ Android/iPhone เป็นจอเสริม/จอ mirror ของ Mac ผ่านสาย USB
 export PATH="/opt/homebrew/bin:$HOME/.local/bin:$PATH"  # nohup'd watcher has no shell profile
-SHARE="$HOME/.local/share/aeasy"
+zmodload zsh/datetime 2>/dev/null   # EPOCHSECONDS, for the relaunch backoff
+SHARE="${AEASY_SHARE:-$HOME/.local/share/aeasy}"   # overridable so test/cli.sh gets a scratch tree
 SERVER="$SHARE/aeasy-server"
 CONFIGAPP="$SHARE/aeasy-config"
 APK="$SHARE/app-debug.apk"
-CFG="$SHARE/config"
-LOG="$SHARE/server.log"
+GCFG="$SHARE/config"    # global config: the DEVICES registry lives here, read by explicit path
+CFG="$GCFG"             # per-device config; with_dev shadows this
 APP=dev.ctz.usbdisplay
+MAX_DEVICES=3
 mkdir -p "$SHARE"  # config/log/dims live here; Homebrew installs don't run install.sh
 
-conf() { grep -m1 "^$1=" "$CFG" 2>/dev/null | cut -d= -f2-; }
+conf()  { grep -m1 "^$1=" "$CFG"  2>/dev/null | cut -d= -f2-; }
+gconf() { grep -m1 "^$1=" "$GCFG" 2>/dev/null | cut -d= -f2-; }
 
-# route every adb call to the wireless device when WIFI_ADDR is set (aeasy wifi)
+# Every writer used to share one "$CFG.tmp": two concurrent writers interleaved into
+# that single file and `mv` then installed the torn result atomically. mktemp per writer.
+conf_set() {   # conf_set <file> <key-regex> [line...]
+  local f=$1 re=$2; shift 2
+  mkdir -p "${f:h}"
+  local t=$(mktemp "${f}.XXXXXX") || return 1
+  { grep -vE "$re" "$f" 2>/dev/null; (( $# )) && print -l -- "$@" } > "$t" && mv "$t" "$f"
+}
+
+# mkdir is atomic everywhere; the registry is read-modify-write from two UIs
+lock_take() {
+  local i=0
+  until mkdir "$SHARE/.lock" 2>/dev/null; do
+    (( ++i > 100 )) && { rmdir "$SHARE/.lock" 2>/dev/null; i=0 }   # stale lock after ~5s
+    sleep 0.05
+  done
+}
+lock_free() { rmdir "$SHARE/.lock" 2>/dev/null; true }
+
+# ---- device registry ---------------------------------------------------------
+# DEVICES=<slot>:<platform>:<serial>,…  — slot and platform first so the serial takes
+# the remainder: an Android device on Wi-Fi has an ip:port serial full of colons.
+
+dev_field() {   # dev_field <slot> plat|serial
+  local d=$(gconf DEVICES) e rest
+  for e in ${(s:,:)d}; do
+    [[ "${e%%:*}" == "$1" ]] || continue
+    rest=${e#*:}
+    case "$2" in
+      plat)   print -r -- "${rest%%:*}" ;;
+      serial) print -r -- "${rest#*:}" ;;
+    esac
+    return 0
+  done
+  return 1
+}
+dev_serial() { dev_field "$1" serial }
+dev_plat()   { dev_field "$1" plat }
+dev_slots()  { local d=$(gconf DEVICES) e; for e in ${(s:,:)d}; do print -r -- "${e%%:*}"; done }
+dev_count()  { local n=($(dev_slots)); print -r -- ${#n} }
+
+slot_of() {   # slot_of <serial>
+  local d=$(gconf DEVICES) e rest
+  for e in ${(s:,:)d}; do rest=${e#*:}; [[ "${rest#*:}" == "$1" ]] && { print -r -- "${e%%:*}"; return 0 } done
+  return 1
+}
+as_slot() {   # as_slot <serial|slot>
+  [[ "$1" == [0-9] ]] && { dev_serial "$1" >/dev/null && { print -r -- "$1"; return 0 }; return 1 }
+  slot_of "$1"
+}
+default_slot() {   # the slot a bare command acts on: the only one, else the input holder, else the first
+  local s=($(dev_slots))
+  (( ${#s} == 1 )) && { print -r -- $s[1]; return 0 }
+  input_holder && return 0
+  (( ${#s} )) && { print -r -- $s[1]; return 0 }
+  return 1
+}
+reg_set() {   # reg_set <slot> <platform> <serial>   — empty serial removes the entry
+  local d=$(gconf DEVICES) e out=()
+  for e in ${(s:,:)d}; do [[ "${e%%:*}" == "$1" ]] || out+=("$e") done
+  [[ -n "$3" ]] && out+=("$1:$2:$3")
+  # sort into an array FIRST: nesting the flags as ${(j:,:)${(on)out}} collapses the inner
+  # result to a space-joined string, and the comma join then has a single element to join
+  local sorted=(${(on)out})
+  conf_set "$GCFG" '^DEVICES=' "DEVICES=${(j:,:)sorted}"
+}
+
+# Slot fixes the port, and the port fixes the virtual display's serialNum — macOS keys a
+# display's saved resolution and arrangement to vendor/product/serial, so a slot that
+# shifted when another device was removed would lose its arrangement.
+dev_port() { print -r -- $(( 7355 + 10 * $1 )) }
+
+with_dev() {   # with_dev <slot> <cmd...>
+  local -x AEASY_SLOT=$1
+  local -x AEASY_SERIAL=$(dev_serial $1)
+  local -x AEASY_PORT=$(dev_port $1)
+  local -x AEASY_DIR="$SHARE/dev/$1"
+  local CFG="$AEASY_DIR/config"
+  local LOGF="$AEASY_DIR/server.log"
+  mkdir -p "$AEASY_DIR"
+  shift
+  "$@"
+}
+
+# A bare `adb` with two devices attached fails with "more than one device/emulator" into
+# >/dev/null. `${VAR:?}` was rejected here: in a non-interactive zsh it kills the SHELL,
+# not the function, so one stray call inside watch_loop would take down every slot.
 adb() {
-  local w=$(conf WIFI_ADDR)
-  command adb ${w:+-s "$w"} "$@"
+  if [[ -z "$AEASY_SERIAL" ]]; then
+    print -u2 -r -- "adb() called with no device context — wrap the call in with_dev"; return 2
+  fi
+  command adb -s "$AEASY_SERIAL" "$@"
 }
 
-plugged() { [[ "$(adb get-state 2>/dev/null)" == "device" ]] }
-warn_unplugged() { echo "⚠️  No phone plugged in (USB) — connect the cable and try again" >&2 }
-
-# ---- platform dispatch -------------------------------------------------------
-# android: any online adb device (USB or WIFI_ADDR). ios: a tethered device via
-# usbmuxd, or a reachable IOS_ADDR in Wi-Fi mode. Android is checked first, so a
-# dual setup preserves today's behaviour; PLATFORM=android|ios in the config
-# overrides. Missing libimobiledevice is NOT an error on the Android path.
-platform() {
-  local p=$(conf PLATFORM)
-  [[ -n "$p" ]] && { echo "$p"; return }
-  plugged && { echo android; return }
-  [[ -n "$(command -v idevice_id >/dev/null 2>&1 && idevice_id -l 2>/dev/null)" ]] && { echo ios; return }
-  local a=$(conf IOS_ADDR)
-  [[ -n "$a" ]] && nc -z -w1 "$a" 7355 >/dev/null 2>&1 && { echo ios; return }
-  echo none
-}
-
-ios_udid() {  # UDID config key disambiguates; otherwise first device wins (iPads/Watches list too)
-  local u=$(conf UDID)
-  [[ -n "$u" ]] && { echo "$u"; return }
-  idevice_id -l 2>/dev/null | head -1
-}
+dev_online() { [[ "$(command adb -s "$1" get-state 2>/dev/null)" == "device" ]] }
+warn_unplugged() { print -u2 -r -- "⚠️  No phone plugged in (USB) — connect the cable and try again" }
+warn_no_devices() { print -u2 -r -- "⚠️  No devices added yet — see: aeasy device list" }
+valid_serial() { print -r -- "$1" | grep -qE '^[A-Za-z0-9._:-]+$' }
 
 ios_tools_ok() {
   command -v iproxy >/dev/null && command -v idevice_id >/dev/null && command -v socat >/dev/null && return 0
-  echo "⚠️  iOS mode needs: brew install libusbmuxd libimobiledevice socat" >&2
+  print -u2 -r -- "⚠️  iOS mode needs: brew install libusbmuxd libimobiledevice socat"
   return 1
 }
 
-# The device listens on :7355; usbmuxd only forwards Mac -> device, so iproxy maps
-# Mac :7356 -> device :7355 and socat bridges the unchanged aeasy-server listener
-# into it. Wi-Fi mode is the same bridge against the IP the app shows on screen.
-# Both are disowned, so stop/teardown must kill them by argv signature.
-relay_ensure() {
-  local a=$(conf IOS_ADDR)
-  if [[ -n "$a" ]]; then
-    pgrep -qf "socat TCP:$a:7355" || socat "TCP:$a:7355" TCP:127.0.0.1:7355 >/dev/null 2>&1 &!
-  else
-    local u=$(ios_udid)
-    pgrep -qf "iproxy 7356:7355" || iproxy 7356:7355 ${u:+-u "$u"} >/dev/null 2>&1 &!
-    pgrep -qf "socat TCP:127.0.0.1:7356" || socat TCP:127.0.0.1:7356 TCP:127.0.0.1:7355 >/dev/null 2>&1 &!
-  fi
+# ---- enumeration -------------------------------------------------------------
+# No discovery beyond these two commands, on purpose: there is no mDNS/ARP scan and no
+# pairing protocol anywhere in this project.
+
+online_ids() {
+  command adb devices 2>/dev/null | awk '$2=="device"{print $1}'
+  command -v idevice_id >/dev/null 2>&1 && idevice_id -l 2>/dev/null
+  true
 }
-relay_kill() { pkill -f "iproxy 7356:7355" 2>/dev/null; pkill -f "socat TCP:" 2>/dev/null }
+
+# serial \t platform \t usb|wifi \t yes|no|n/a \t state \t name
+devices_list() {
+  local line serial state name conn app
+  command adb devices -l 2>/dev/null | tail -n +2 | while IFS= read -r line; do
+    [[ -z "${line// }" ]] && continue
+    serial=${line%% *}
+    state=$(print -r -- "$line" | awk '{print $2}')
+    # `model:` is only present for entries in `device` state; unauthorized/offline rows
+    # fall back to the serial so they still have something to display
+    name=$(print -r -- "$line" | grep -oE 'model:[^ ]+' | cut -d: -f2 | tr '_' ' ')
+    [[ -z "$name" ]] && name="$serial"
+    conn=usb; [[ "$serial" == *:* ]] && conn=wifi
+    app=unknown
+    if [[ "$state" == device ]]; then
+      # substring match + CRLF: an unanchored grep counts dev.ctz.usbdisplay.debug as a hit,
+      # and pm exits 0 printing nothing when the package is absent, so status is useless
+      if command adb -s "$serial" shell pm list packages "$APP" 2>/dev/null \
+           | tr -d '\r' | grep -qx "package:$APP"; then app=yes; else app=no; fi
+    fi
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$serial" android "$conn" "$app" "$state" "$name"
+  done
+  command -v idevice_id >/dev/null 2>&1 || return 0
+  local u n st
+  idevice_id -l 2>/dev/null | while IFS= read -r u; do
+    [[ -z "${u// }" ]] && continue
+    n=$(ideviceinfo -u "$u" -k DeviceName 2>/dev/null | tr -d '\r')
+    st=device
+    [[ -z "$n" ]] && { n="$u"; st=untrusted }   # listed but not paired yet
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$u" ios usb "n/a" "$st" "$n"
+  done
+}
+
+dev_row()  { devices_list | awk -F'\t' -v s="$1" '$1==s{print; exit}' }
+dev_name() {   # dev_name <slot> — registry name, falling back to the serial
+  local s=$(dev_serial "$1") n
+  n=$(dev_row "$s" | cut -f6)
+  print -r -- "${n:-$s}"
+}
+state_msg() {   # state_msg <state> <name>
+  case "$1" in
+    unauthorized) print -r -- "$2 — allow USB debugging on the device" ;;
+    untrusted)    print -r -- "$2 — unlock the device and tap Trust" ;;
+    offline)      print -r -- "$2 — offline" ;;
+    *)            print -r -- "$2 — $1" ;;
+  esac
+}
+
+# ---- per-device server lifecycle --------------------------------------------
+# --slot is inert on the server (it reads only argv[1]/argv[2] and scans for --ios), so it
+# is a free per-process handle. Scoping the kills without the pgrep liveness guards would
+# produce a feature that never starts a second device: with slot 0 alive, a bare
+# `pgrep -qf aeasy-server` reports every other slot as already running.
+server_up()   { pgrep -qf "aeasy-serve[r] .*--slot $AEASY_SLOT" }
+server_kill() { pkill -f "aeasy-serve[r] .*--slot $AEASY_SLOT" 2>/dev/null; true }
+
+panel_dims() {   # PANEL=<W> <H> locks the display size; absent = auto-size
+  local p=$(conf PANEL) a
+  [[ -z "$p" ]] && return 1
+  a=(${=p})
+  (( ${#a} == 2 )) && [[ "$a[1]" == <-> && "$a[2]" == <-> ]] && (( a[1] > 0 && a[2] > 0 )) \
+    && { print -r -- "$a[1] $a[2]"; return 0 }
+  print -r -- "⚠️  slot $AEASY_SLOT: ignoring malformed PANEL='$p'" >> "$AEASY_DIR/server.log"
+  return 1
+}
 
 phone_rotation() {  # logical rotation; 'rotation N' alone can match the physical panel's (always 0)
   local d=$(adb shell dumpsys display 2>/dev/null)
-  local r=$(echo "$d" | grep -oEm1 'mCurrentOrientation=[0-3]' | grep -oE '[0-3]')
-  [[ -n "$r" ]] && echo "$r" || echo "$d" | grep -oEm1 'rotation [0-3]' | grep -oE '[0-3]' | head -1
+  local r=$(print -r -- "$d" | grep -oEm1 'mCurrentOrientation=[0-3]' | grep -oE '[0-3]')
+  [[ -n "$r" ]] && print -r -- "$r" || print -r -- "$d" | grep -oEm1 'rotation [0-3]' | grep -oE '[0-3]' | head -1
 }
 
 phone_dims() {  # echoes "W H" matching current phone rotation
@@ -75,260 +206,633 @@ phone_dims() {  # echoes "W H" matching current phone rotation
   local a=${size%x*} b=${size#*x}
   local small=$(( a < b ? a : b )) big=$(( a < b ? b : a ))
   local rot=$(phone_rotation)
-  if [[ "$rot" == 0 || "$rot" == 2 ]]; then echo "$small $big"; else echo "$big $small"; fi
+  if [[ "$rot" == 0 || "$rot" == 2 ]]; then print -r -- "$small $big"; else print -r -- "$big $small"; fi
 }
 
-# SOURCES replaces the old exclusive MODE/WINDOW_APP pair; strip those so a stale
-# value can never come back if SOURCES is later cleared
-set_sources() {
-  mkdir -p "$SHARE"
-  { grep -vE '^(SOURCES|MODE|WINDOW_APP)=' "$CFG" 2>/dev/null; echo "SOURCES=$1"; } > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
+# the server is disowned, so its exit status is captured by the wrapper subshell and
+# harvested by the watcher on the next tick (see backoff_*)
+server_spawn() {   # server_spawn <w> <h> [--ios]
+  local w=$1 h=$2; shift 2
+  # drop the status left by the server we just replaced: server_kill is OUR doing, and a
+  # deliberate restart (rotation, config change) must not read as a crash on the next tick
+  rm -f "$AEASY_DIR/exit"
+  { "$SERVER" $w $h --slot $AEASY_SLOT "$@" >>"$AEASY_DIR/server.log" 2>&1
+    print -r -- $? > "$AEASY_DIR/exit" } &!
+  print -r -- "$EPOCHSECONDS" > "$AEASY_DIR/launched"
 }
 
 server_start() {
-  pkill -f aeasy-server 2>/dev/null
-  local dims=($(phone_dims))
-  echo "${dims[1]} ${dims[2]}" > "$SHARE/dims"
-  "$SERVER" ${dims[1]} ${dims[2]} >>"$LOG" 2>&1 &!
-  echo "🖥  Virtual display up ${dims[1]}x${dims[2]}"
+  server_kill
+  local dims=($(panel_dims)) locked=1
+  (( ${#dims} == 2 )) || { dims=($(phone_dims)); locked=0 }
+  (( ${#dims} == 2 )) || { print -u2 -r -- "⚠️  slot $AEASY_SLOT: could not read the phone's size"; return 1 }
+  print -r -- "${dims[1]} ${dims[2]}" > "$AEASY_DIR/dims"
+  server_spawn ${dims[1]} ${dims[2]}
+  print -r -- "🖥  Virtual display up ${dims[1]}x${dims[2]} (slot $AEASY_SLOT$( (( locked )) && print -n ', locked'))"
 }
 
 # iOS: dims come FROM the server (the app reports its size as a type-3 packet and the
 # server writes dims.ios before restarting itself) — never written here. First run on
 # an unknown device builds one iPhone-7-sized display, then self-corrects.
 ios_server_start() {
-  pkill -f aeasy-server 2>/dev/null
-  local dims=($(cat "$SHARE/dims.ios" 2>/dev/null))
+  server_kill
+  local dims=($(panel_dims))
+  (( ${#dims} == 2 )) || dims=($(cat "$AEASY_DIR/dims.ios" 2>/dev/null))
   (( ${#dims} == 2 )) || dims=(372 664)
-  "$SERVER" ${dims[1]} ${dims[2]} --ios >>"$LOG" 2>&1 &!
-  echo "🖥  Virtual display up ${dims[1]}x${dims[2]} (iOS)"
+  server_spawn ${dims[1]} ${dims[2]} --ios
+  print -r -- "🖥  Virtual display up ${dims[1]}x${dims[2]} (iOS, slot $AEASY_SLOT)"
 }
 
+# The reverse rule lives in the phone's adbd, so every device keeps device-side 7355 and
+# only the Mac-side port differs. That is what lets the shipped APK stay untouched.
 app_open() {
-  adb reverse tcp:7355 tcp:7355 >/dev/null 2>&1
+  adb reverse tcp:7355 tcp:$AEASY_PORT >/dev/null 2>&1
   adb shell "pidof $APP >/dev/null || am start -n $APP/.MainActivity" >/dev/null 2>&1
+}
+
+# The device listens on :7355; usbmuxd only forwards Mac -> device, so iproxy maps a
+# per-slot Mac port -> device :7355 and socat bridges this slot's server into it.
+relay_ensure() {
+  local a=$(conf IOS_ADDR) l=$(( AEASY_PORT + 1 ))
+  if [[ -n "$a" ]]; then
+    pgrep -qf "socat TCP:$a:7355 TCP:127.0.0.1:$AEASY_PORT" \
+      || socat "TCP:$a:7355" TCP:127.0.0.1:$AEASY_PORT >/dev/null 2>&1 &!
+  else
+    pgrep -qf "iproxy $l:7355 -u $AEASY_SERIAL" \
+      || iproxy $l:7355 -u "$AEASY_SERIAL" >/dev/null 2>&1 &!
+    pgrep -qf "socat TCP:127.0.0.1:$l TCP:127.0.0.1:$AEASY_PORT" \
+      || socat TCP:127.0.0.1:$l TCP:127.0.0.1:$AEASY_PORT >/dev/null 2>&1 &!
+  fi
+}
+relay_kill() {
+  local a=$(conf IOS_ADDR) l=$(( AEASY_PORT + 1 ))
+  pkill -f "iproxy $l:7355 -u $AEASY_SERIAL" 2>/dev/null
+  pkill -f "socat TCP:127.0.0.1:$l TCP:127.0.0.1:$AEASY_PORT" 2>/dev/null
+  [[ -n "$a" ]] && pkill -f "socat TCP:$a:7355 TCP:127.0.0.1:$AEASY_PORT" 2>/dev/null
+  true
+}
+relay_kill_all() { local s; for s in $(dev_slots); do with_dev $s relay_kill; done; true }
+
+# ---- relaunch backoff --------------------------------------------------------
+# Keyed on exit STATUS, never on time-since-launch: handleResize calls exit(0) as the
+# normal rotation and first-connect mechanism, seconds after launch, and penalising that
+# would break the iOS rotation budget. State lives in the slot dir so it survives a
+# watcher restart.
+backoff_reset() { rm -f "$AEASY_DIR/backoff"; true }
+backoff_ready() {
+  local f="$AEASY_DIR/backoff" b
+  [[ -f "$f" ]] || return 0
+  b=(${=$(<"$f")})
+  (( ${#b} >= 2 )) || return 0
+  (( EPOCHSECONDS >= b[2] ))
+}
+backoff_bump() {
+  local f="$AEASY_DIR/backoff" n=1 b d
+  [[ -f "$f" ]] && { b=(${=$(<"$f")}); (( ${#b} >= 1 )) && n=$(( b[1] + 1 )) }
+  local delays=(2 8 30 60)
+  d=$delays[$(( n > 4 ? 4 : n ))]
+  print -r -- "$n $(( EPOCHSECONDS + d ))" > "$f"
+  print -r -- "$(date '+%H:%M:%S') slot $AEASY_SLOT: server exited abnormally (attempt $n) — retrying in ${d}s" \
+    >> "$AEASY_DIR/server.log"
+}
+# harvest the previous run's exit status, and forgive a slot that has survived a minute
+backoff_tick() {
+  local ex="$AEASY_DIR/exit" st
+  if [[ -f "$ex" ]]; then
+    st=$(<"$ex"); rm -f "$ex"
+    # 0 = the iOS rotation/first-connect restart; 143/137 = a SIGTERM/SIGKILL we sent
+    # ourselves. Only a genuine crash arms the backoff.
+    case "$st" in
+      0|143|137) backoff_reset ;;
+      *)         backoff_bump ;;
+    esac
+    return
+  fi
+  if server_up && [[ -f "$AEASY_DIR/launched" ]]; then
+    (( EPOCHSECONDS - $(<"$AEASY_DIR/launched") >= 60 )) && backoff_reset
+  fi
+  true
+}
+
+# ---- input arbitration -------------------------------------------------------
+input_holder() {
+  local s
+  for s in $(dev_slots); do
+    [[ "$(grep -m1 '^INPUT=' "$SHARE/dev/$s/config" 2>/dev/null | cut -d= -f2-)" == 1 ]] \
+      && { print -r -- "$s"; return 0 }
+  done
+  return 1
+}
+# clear-then-set, so two holders can only come from a hand-edited config. Non-holders get
+# an explicit INPUT=0: the server treats an ABSENT key as yes, so that a single-device
+# install and the smoke harness — neither of which writes the key — keep working.
+input_set() {
+  local s
+  for s in $(dev_slots); do
+    if [[ "$s" == "$1" ]]; then conf_set "$SHARE/dev/$s/config" '^INPUT=' "INPUT=1"
+    else conf_set "$SHARE/dev/$s/config" '^INPUT=' "INPUT=0"; fi
+  done
+}
+
+# ---- slot seeding ------------------------------------------------------------
+# DEVICES= is the single source of truth for slot↔serial; SERIAL= inside a slot config is
+# a cross-check, and a mismatch means the slot belonged to a different device — its layout
+# and dims are stale and must not be inherited.
+seed_slot() {   # seed_slot <slot> <serial> <platform>
+  local d="$SHARE/dev/$1" prev
+  mkdir -p "$d"
+  prev=$(grep -m1 '^SERIAL=' "$d/config" 2>/dev/null | cut -d= -f2-)
+  if [[ -n "$prev" && "$prev" != "$2" ]]; then
+    rm -f "$d/layout.json" "$d/dims" "$d/dims.ios" "$d/backoff" "$d/config"
+    prev=""
+  fi
+  if [[ ! -f "$d/config" ]]; then
+    # seed from slot 0, not from the global config, which after migration holds only DEVICES=
+    if [[ "$1" != 0 && -f "$SHARE/dev/0/config" ]]; then
+      grep -vE '^(SERIAL|PLATFORM|SOURCES|PANEL|INPUT|IOS_ADDR)=' "$SHARE/dev/0/config" > "$d/config"
+    else
+      : > "$d/config"
+    fi
+  fi
+  conf_set "$d/config" '^(SERIAL|PLATFORM)=' "SERIAL=$2" "PLATFORM=$3"
+  # conf_set, never `>>`: the settings GUI writes its config with no trailing newline, so
+  # an append would splice SOURCES onto the end of the previous key
+  grep -q '^SOURCES=' "$d/config" || conf_set "$d/config" '^SOURCES=' "SOURCES=display"
+}
+
+# ---- one-time migration ------------------------------------------------------
+# bin/aeasy never recorded a serial for a cable-connected Android phone, so the common
+# upgrade has neither WIFI_ADDR nor UDID and the serial has to come from enumeration.
+migrate() {
+  [[ -n "$(gconf DEVICES)" ]] && return 0
+  local serial plat rows n
+  serial=$(gconf WIFI_ADDR); plat=android
+  [[ -z "$serial" ]] && { serial=$(gconf UDID); [[ -n "$serial" ]] && plat=ios }
+  if [[ -z "$serial" ]]; then
+    rows=(${(f)"$(devices_list | awk -F'\t' '$5=="device"')"})
+    rows=(${rows:#})
+    n=${#rows}
+    (( n == 0 )) && return 0                       # nothing attached yet: not an error
+    if (( n > 1 )); then
+      print -u2 -r -- "⚠️  Several devices are connected — add the one you want with: aeasy device add <id>"
+      local r; for r in $rows; do print -u2 -r -- "   $(print -r -- $r | cut -f1)  $(print -r -- $r | cut -f6)"; done
+      return 1                                     # never guess: guessing streams to the wrong phone
+    fi
+    serial=$(print -r -- $rows[1] | cut -f1)
+    plat=$(print -r -- $rows[1] | cut -f2)
+  fi
+  local d="$SHARE/dev/0"
+  mkdir -p "$d"
+  [[ -f "$d/config" ]] || { [[ -f "$GCFG" ]] && cp "$GCFG" "$d/config" || : > "$d/config" }
+  local f
+  for f in layout.json dims dims.ios server.log; do
+    [[ -f "$SHARE/$f" && ! -f "$d/$f" ]] && mv "$SHARE/$f" "$d/$f"
+  done
+  conf_set "$d/config" '^(SERIAL|PLATFORM|INPUT|DEVICES|WIFI_ADDR|UDID)=' \
+    "SERIAL=$serial" "PLATFORM=$plat" "INPUT=1"
+  # conf_set, never `>>`: the settings GUI writes its config with no trailing newline, so
+  # an append would splice SOURCES onto the end of the previous key
+  grep -q '^SOURCES=' "$d/config" || conf_set "$d/config" '^SOURCES=' "SOURCES=display"
+  conf_set "$GCFG" '^(DEVICES|SOURCES|MODE|WINDOW_APP|PANEL|INPUT|UDID|IOS_ADDR|WIFI_ADDR|FPS|BITRATE|SCALE|CODEC|PLATFORM)=' \
+    "DEVICES=0:$plat:$serial"
+  print -r -- "✅ Migrated to the multi-device layout — slot 0 is $serial"
+}
+
+# ---- device subcommand -------------------------------------------------------
+_device_add() {
+  local serial=$1 row plat state name slot s prev
+  valid_serial "$serial" || { print -u2 -r -- "⚠️  Unrecognised device id"; return 1 }
+  slot_of "$serial" >/dev/null && { print -u2 -r -- "⚠️  $serial is already added"; return 1 }
+  row=$(dev_row "$serial")
+  [[ -z "$row" ]] && { print -u2 -r -- "⚠️  $serial not found — see: aeasy device list"; return 1 }
+  plat=$(print -r -- "$row" | cut -f2); state=$(print -r -- "$row" | cut -f5); name=$(print -r -- "$row" | cut -f6)
+  [[ "$state" == device ]] || { print -u2 -r -- "⚠️  $(state_msg "$state" "$name")"; return 1 }
+  if [[ "$plat" == android ]]; then
+    # the same phone over USB and over Wi-Fi has two serials, but one reverse table keyed
+    # by device-side port — a second slot would silently replace the first slot's rule
+    local ro=$(command adb -s "$serial" shell getprop ro.serialno 2>/dev/null | tr -d '\r')
+    for s in $(dev_slots); do
+      [[ "$(dev_plat $s)" == android ]] || continue
+      prev=$(command adb -s "$(dev_serial $s)" shell getprop ro.serialno 2>/dev/null | tr -d '\r')
+      [[ -n "$ro" && "$ro" == "$prev" ]] && {
+        print -u2 -r -- "⚠️  that device is already added as slot $s ($(dev_serial $s))"; return 1 }
+    done
+  fi
+  # reclaim first: a returning device keeps its port, display serial, arrangement and layout
+  for s in {0..$(( MAX_DEVICES - 1 ))}; do
+    dev_serial $s >/dev/null && continue
+    [[ "$(grep -m1 '^SERIAL=' "$SHARE/dev/$s/config" 2>/dev/null | cut -d= -f2-)" == "$serial" ]] && { slot=$s; break }
+  done
+  if [[ -z "$slot" ]]; then
+    for s in {0..$(( MAX_DEVICES - 1 ))}; do dev_serial $s >/dev/null || { slot=$s; break } done
+  fi
+  [[ -z "$slot" ]] && { print -u2 -r -- "⚠️  Maximum $MAX_DEVICES devices"; return 1 }
+  seed_slot "$slot" "$serial" "$plat"
+  reg_set "$slot" "$plat" "$serial"
+  input_holder >/dev/null || input_set "$slot"
+  print -r -- "➕ Added $name as slot $slot (port $(dev_port $slot))"
+}
+
+_device_rm() {
+  local slot=$(as_slot "$1")
+  [[ -z "$slot" ]] && { print -u2 -r -- "⚠️  not an added device: $1"; return 1 }
+  local held=""; [[ "$(input_holder)" == "$slot" ]] && held=1
+  with_dev $slot server_kill
+  with_dev $slot relay_kill
+  reg_set "$slot" "" ""
+  # the directory stays for reclaim; INPUT falls to the lowest remaining slot
+  [[ -n "$held" ]] && { local rest=($(dev_slots)); (( ${#rest} )) && input_set $rest[1] }
+  print -r -- "➖ Removed slot $slot (settings kept — re-adding it restores them)"
+}
+
+device_cmd() {
+  case "${1:-list}" in
+    list)
+      local added row serial state app name plat conn mark
+      # machine-readable for the tray and the settings sheet: slot(- if not added), serial,
+      # platform, usb|wifi, yes|no|n/a|unknown, adb state, name
+      if [[ "$2" == "--raw" ]]; then
+        devices_list | while IFS=$'\t' read -r serial plat conn app state name; do
+          added=$(slot_of "$serial") || added="-"
+          printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$added" "$serial" "$plat" "$conn" "$app" "$state" "$name"
+        done
+        return 0
+      fi
+      print -r -- "SLOT  DEVICE                          PLATFORM  LINK  APP  "
+      devices_list | while IFS=$'\t' read -r serial plat conn app state name; do
+        added=$(slot_of "$serial") || added=""
+        mark="  -"; [[ -n "$added" ]] && mark="  $added"
+        [[ "$state" == device ]] || name=$(state_msg "$state" "$name")
+        printf '%-4s  %-30s  %-8s  %-4s  %-3s  %s\n' "$mark" "$name" "$plat" "$conn" "$app" "$serial"
+      done
+      print -r -- ""
+      print -r -- "add: aeasy device add <id>   ·   remove: aeasy device rm <id|slot>"
+      ;;
+    add)
+      [[ -z "$2" ]] && { print -u2 -r -- "usage: aeasy device add <id>   (ids: aeasy device list)"; return 1 }
+      lock_take; _device_add "$2"; local rc=$?; lock_free
+      (( rc )) || session_restart "$(slot_of "$2")"
+      return $rc ;;
+    rm|remove)
+      [[ -z "$2" ]] && { print -u2 -r -- "usage: aeasy device rm <id|slot>"; return 1 }
+      lock_take; _device_rm "$2"; local rc=$?; lock_free
+      return $rc ;;
+    input)
+      [[ -z "$2" ]] && { local h=$(input_holder) && print -r -- "$h  $(dev_name $h)" || print -r -- "(nobody)"; return 0 }
+      local slot=$(as_slot "$2")
+      [[ -z "$slot" ]] && { print -u2 -r -- "⚠️  not an added device: $2"; return 1 }
+      input_set "$slot"
+      print -r -- "🖱  $(dev_name $slot) controls the Mac" ;;
+    *) print -u2 -r -- "usage: aeasy device list|add|rm|input"; return 1 ;;
+  esac
+}
+
+# ---- session -----------------------------------------------------------------
+slot_restart() {
+  case "$(dev_plat $AEASY_SLOT)" in
+    android) server_start || return 1; sleep 1; app_open ;;
+    ios)     ios_tools_ok || return 1; ios_server_start; relay_ensure
+             print -r -- "📱 Open AEasy Display on $(dev_name $AEASY_SLOT)" ;;
+    *)       return 1 ;;
+  esac
 }
 
 # one dispatcher for every "apply the new config now" call site — mirror, screen,
 # sources, tune, restart — so a future subcommand can't reintroduce the bug of
 # writing $SHARE/dims or shelling adb on the iOS path
-session_restart() {
-  case "$(platform)" in
-    android) server_start; sleep 1; app_open ;;
-    ios)     ios_tools_ok || return 1; ios_server_start; relay_ensure
-             echo "📱 Open AEasy Display on your iPhone/iPad" ;;
-    *)       warn_unplugged; return 1 ;;
+session_restart() {   # session_restart [<slot>]
+  local slots
+  if [[ -n "$1" ]]; then slots=($1); else slots=($(dev_slots)); fi
+  (( ${#slots} )) || { warn_no_devices; return 1 }
+  local s rc=0
+  for s in $slots; do with_dev $s slot_restart || rc=1; done
+  return $rc
+}
+
+watch_tick() {   # watch_tick <newline-separated online ids>
+  local online=$1 plat=$(dev_plat $AEASY_SLOT) a=$(conf IOS_ADDR) up=0
+  [[ -z "$AEASY_SERIAL" ]] && return
+  backoff_tick
+  if print -r -- "$online" | grep -qxF -- "$AEASY_SERIAL"; then
+    up=1
+  elif [[ "$plat" == ios && -n "$a" ]] && nc -z -w1 "$a" 7355 >/dev/null 2>&1; then
+    up=1
+  elif [[ "$AEASY_SERIAL" == *:* ]]; then
+    command adb connect "$AEASY_SERIAL" >/dev/null 2>&1   # wireless: try to reconnect first
+  fi
+  if (( ! up )); then
+    # device gone → tear down THIS slot only, and leave its registry entry and INPUT alone
+    server_up && server_kill
+    relay_kill
+    return
+  fi
+  case "$plat" in
+    android)
+      server_up || { backoff_ready && server_start } || return
+      app_open
+      panel_dims >/dev/null && return   # locked: never restart on rotation
+      # rotate the virtual display only while our app is the focused one
+      if adb shell dumpsys window 2>/dev/null | grep -m1 mCurrentFocus | grep -q "$APP"; then
+        local cur=$(phone_dims)
+        [[ -n "$cur" && "$cur" != "$(cat "$AEASY_DIR/dims" 2>/dev/null)" ]] && server_start
+      fi
+      ;;
+    ios)
+      # rotation needs no polling: the app pushes a type-3 packet, the server writes
+      # dims.ios and exits 0, and the next tick relaunches it resized
+      server_up || { backoff_ready && ios_server_start }
+      relay_ensure
+      ;;
   esac
+  true
+}
+
+# a --slot process whose slot left the registry is a leftover from a lost concurrent write
+reap_orphans() {
+  local live=$(dev_slots) s=""
+  for s in {0..$(( MAX_DEVICES - 1 ))}; do
+    print -r -- "$live" | grep -qx "$s" && continue
+    pgrep -qf "aeasy-serve[r] .*--slot $s" && pkill -f "aeasy-serve[r] .*--slot $s" 2>/dev/null
+  done
+  true
 }
 
 watch_loop() {
+  # `local s` (no value) re-run inside the loop DISPLAYS s on the second pass, because zsh
+  # treats a valueless typeset of an existing parameter as a query — it printed "s=0" to
+  # the watcher's stdout every tick. Always give locals a value.
+  local online="" s=""
   while true; do
-    case "$(platform)" in
-      android)
-        pgrep -qf aeasy-server || server_start
-        app_open
-        # rotate the virtual display only while our app is the focused one
-        if adb shell dumpsys window 2>/dev/null | grep -m1 mCurrentFocus | grep -q "$APP"; then
-          local cur=$(phone_dims)
-          if [[ -n "$cur" && "$cur" != "$(cat "$SHARE/dims" 2>/dev/null)" ]]; then
-            server_start
-          fi
-        fi
-        ;;
-      ios)
-        # rotation needs no polling here: the app pushes a type-3 packet, the server
-        # writes dims.ios and exits, and the pgrep below relaunches it resized
-        pgrep -qf aeasy-server || ios_server_start
-        relay_ensure
-        ;;
-      *)
-        # android wireless mode: try to reconnect before giving up this tick
-        local w=$(conf WIFI_ADDR)
-        [[ -n "$w" ]] && command adb connect "$w" >/dev/null 2>&1
-        # device gone → tear down the virtual display (and iOS relays) until it's back
-        if [[ "$(platform)" == "none" ]]; then
-          pgrep -qf aeasy-server && pkill -f aeasy-server
-          relay_kill
-        fi
-        ;;
-    esac
+    online=$(online_ids)
+    for s in $(dev_slots); do with_dev $s watch_tick "$online"; done
+    reap_orphans
     sleep 2
   done
 }
 
+# SOURCES replaces the old exclusive MODE/WINDOW_APP pair; strip those so a stale
+# value can never come back if SOURCES is later cleared
+set_sources() { conf_set "$CFG" '^(SOURCES|MODE|WINDOW_APP)=' "SOURCES=$1" }
+
+# `aeasy sources`, `mirror` and `screen` act on one device: an explicit slot if given,
+# else the only one, else whoever holds input
+pick_slot() {   # pick_slot <maybe-slot-or-serial>   — echoes "slot rest..."
+  local s
+  if [[ -n "$1" ]] && s=$(as_slot "$1"); then print -r -- "$s"; return 0; fi
+  s=$(default_slot) || return 1
+  print -r -- "$s"
+}
+
+status_slot() {
+  local plat=$(dev_plat $AEASY_SLOT) name=$(dev_name $AEASY_SLOT)
+  local hold=""; [[ "$(input_holder)" == "$AEASY_SLOT" ]] && hold="  🖱 input"
+  print -r -- "── slot $AEASY_SLOT · $name · port $AEASY_PORT$hold"
+  case "$plat" in
+    ios)
+      local a=$(conf IOS_ADDR) l=$(( AEASY_PORT + 1 ))
+      if [[ -n "$a" ]]; then
+        nc -z -w1 "$a" 7355 >/dev/null 2>&1 && print -r -- "   📶 Wireless (iOS): reachable $a" \
+                                            || print -r -- "   📶 Wireless (iOS): unreachable ($a)"
+      elif [[ -n "$(ideviceinfo -u "$AEASY_SERIAL" -k DeviceName 2>/dev/null)" ]]; then
+        print -r -- "   🔌 Cable (iOS): connected"
+      else
+        print -r -- "   🔌 Cable (iOS): not trusted — unlock the device and tap Trust"
+      fi
+      pgrep -qf "iproxy $l:7355 -u $AEASY_SERIAL" && print -r -- "   🔀 USB relay: running" \
+        || { [[ -z "$a" ]] && print -r -- "   🔀 USB relay: stopped" }
+      ;;
+    *)
+      if dev_online "$AEASY_SERIAL"; then
+        [[ "$AEASY_SERIAL" == *:* ]] && print -r -- "   📶 Wireless: connected" || print -r -- "   🔌 Cable: connected"
+        adb shell pidof $APP >/dev/null 2>&1 && print -r -- "   📱 Phone app: open" || print -r -- "   📱 Phone app: closed"
+      else
+        print -r -- "   🔌 Not connected"
+      fi
+      ;;
+  esac
+  server_up && print -r -- "   🖥  Server: running" || print -r -- "   🖥  Server: stopped"
+  # only this server run: the log is append-only and quality is auto-lowered live now,
+  # so an old LAGGY line would recommend tuning forever
+  if tail -r "$AEASY_DIR/server.log" 2>/dev/null | sed -n '1,/listening on/p' | grep -q 'LAGGY'; then
+    print -r -- "   🐢 Lag detected — quality was lowered automatically (secondary panes first)"
+  fi
+  local src=$(conf SOURCES)
+  print -r -- "   🧩 Sources: ${src:-display}"
+  local p=$(conf PANEL); [[ -n "$p" ]] && print -r -- "   📐 Resolution locked: $p"
+}
+
+# sourced by test/cli.sh to assert the registry and lifecycle helpers without a device
+[[ -n "$AEASY_LIB" ]] && return 0
+
 case "${1:-start}" in
   start)
-    case "$(platform)" in
-      android) server_start; sleep 1; app_open ;;
-      ios)     ios_tools_ok || exit 1; ios_server_start; relay_ensure
-               echo "📱 Open AEasy Display on your iPhone/iPad (install: aeasy install-app)" ;;
-      *)       warn_unplugged; exit 1 ;;
-    esac
+    migrate || exit 1
+    (( $(dev_count) )) || { warn_no_devices; exit 1 }
+    session_restart || exit 1
     pgrep -qf "aeasy _watch" || (nohup zsh "$0" _watch >/dev/null 2>&1 &!)
     pgrep -qf aeasy-tray || ("$SHARE/aeasy-tray" >/dev/null 2>&1 &!)
-    echo "✅ Running — plug, unplug, or rotate freely (stop: aeasy stop)"
+    print -r -- "✅ Running — plug, unplug, or rotate freely (stop: aeasy stop)"
     ;;
   stop)
     pkill -f "aeasy _watch" 2>/dev/null
-    pkill -f aeasy-server 2>/dev/null
-    relay_kill
-    echo "⏹  Stopped"
+    relay_kill_all              # scoped now, so stop must loop the registry itself
+    pkill -f aeasy-server 2>/dev/null   # killing every slot IS the intent here
+    print -r -- "⏹  Stopped"
     ;;
   restart)
-    session_restart || exit 1
+    migrate || exit 1
+    if [[ -n "$2" ]]; then
+      slot=$(as_slot "$2") || { print -u2 -r -- "⚠️  not an added device: $2"; exit 1 }
+      session_restart "$slot" || exit 1
+    else
+      session_restart || exit 1
+    fi
+    ;;
+  device)
+    migrate >/dev/null 2>&1
+    shift; device_cmd "$@" || exit 1
     ;;
   app)
-    case "$(platform)" in
-      android) app_open && echo "📱 Viewer app launched on the phone" ;;
-      ios)     echo "📱 Open AEasy Display on your iPhone/iPad — it cannot be launched remotely" ;;
+    migrate || exit 1
+    slot=$(pick_slot "$2") || { warn_no_devices; exit 1 }
+    case "$(dev_plat $slot)" in
+      android) with_dev $slot app_open && print -r -- "📱 Viewer app launched on $(dev_name $slot)" ;;
+      ios)     print -r -- "📱 Open AEasy Display on your iPhone/iPad — it cannot be launched remotely" ;;
       *)       warn_unplugged; exit 1 ;;
     esac
     ;;
   mirror)
-    if [[ -z "$2" ]]; then echo "usage: aeasy mirror <AppName>   e.g. aeasy mirror Safari"; exit 1; fi
-    set_sources "window:$2"
-    session_restart || exit 1
-    echo "🪞 Mirroring '$2' (back to extended: aeasy screen)"
-    echo "   showing several at once: aeasy sources display,window:$2"
+    if [[ -z "$2" ]]; then print -r -- "usage: aeasy mirror <AppName>   e.g. aeasy mirror Safari"; exit 1; fi
+    migrate || exit 1
+    slot=$(pick_slot "$3") || { warn_no_devices; exit 1 }
+    with_dev $slot set_sources "window:$2"
+    session_restart $slot || exit 1
+    print -r -- "🪞 Mirroring '$2' on $(dev_name $slot) (back to extended: aeasy screen)"
+    print -r -- "   showing several at once: aeasy sources display,window:$2"
     ;;
   screen)
-    set_sources "display"
-    session_restart >/dev/null 2>&1
-    echo "🖥  Extended-display mode"
+    migrate || exit 1
+    slot=$(pick_slot "$2") || { warn_no_devices; exit 1 }
+    with_dev $slot set_sources "display"
+    session_restart $slot >/dev/null 2>&1
+    print -r -- "🖥  Extended-display mode on $(dev_name $slot)"
     ;;
   sources)
-    if [[ -z "$2" ]]; then
-      cur=$(conf SOURCES)
-      if [[ -n "$cur" ]]; then echo "$cur"
-      elif [[ "$(conf MODE)" == "window" ]]; then echo "window:$(conf WINDOW_APP)"
-      else echo "display"; fi
+    migrate >/dev/null 2>&1
+    spec="$2"
+    if slot=$(as_slot "$2" 2>/dev/null) && [[ -n "$slot" ]]; then spec="$3"; else slot=$(default_slot) || { warn_no_devices; exit 1 } fi
+    if [[ -z "$spec" ]]; then
+      cur=$(with_dev $slot conf SOURCES)
+      print -r -- "${cur:-display}"
       exit 0
     fi
-    n=$(echo "$2" | tr ',' '\n' | grep -c .)
-    if (( n > 3 )); then echo "⚠️  Maximum 3 sources — got $n ($2)" >&2; exit 1; fi
-    set_sources "$2"
-    echo "🧩 Sources: $2"
+    n=$(print -r -- "$spec" | tr ',' '\n' | grep -c .)
+    if (( n > 3 )); then print -u2 -r -- "⚠️  Maximum 3 sources — got $n ($spec)"; exit 1; fi
+    with_dev $slot set_sources "$spec"
+    print -r -- "🧩 Sources on $(dev_name $slot): $spec"
     # config-only edit works unplugged, like `aeasy screen`
-    session_restart >/dev/null 2>&1 || echo "   (plug the device in to apply)"
+    session_restart $slot >/dev/null 2>&1 || print -r -- "   (plug the device in to apply)"
     ;;
   status)
-    case "$(platform)" in
-      ios)
-        A=$(conf IOS_ADDR)
-        U=$(conf UDID)
-        NAME=$(ideviceinfo ${U:+-u "$U"} -k DeviceName 2>/dev/null)
-        if [[ -n "$A" ]]; then
-          nc -z -w1 "$A" 7355 >/dev/null 2>&1 && echo "📶 Wireless (iOS): reachable $A" || echo "📶 Wireless (iOS): unreachable ($A)"
-        elif [[ -n "$NAME" ]]; then echo "🔌 Cable (iOS): connected ($NAME)"
-        elif [[ -n "$(idevice_id -l 2>/dev/null)" ]]; then
-          echo "🔌 Cable (iOS): not trusted — unlock the device and tap Trust"
-        fi
-        pgrep -qf "iproxy 7356:7355" && echo "🔀 USB relay: running" || { [[ -z "$A" ]] && echo "🔀 USB relay: stopped"; }
-        pgrep -qf "socat TCP:" && echo "🔀 Bridge: running" || echo "🔀 Bridge: stopped"
-        ;;
-      *)
-        W=$(conf WIFI_ADDR)
-        if [[ -n "$W" ]]; then
-          if plugged; then echo "📶 Wireless: connected $W ($(adb shell getprop ro.product.model 2>/dev/null))"; else echo "📶 Wireless: not connected ($W)"; fi
-        else
-          if plugged; then echo "🔌 Cable: connected ($(adb shell getprop ro.product.model 2>/dev/null))"; else echo "🔌 Cable: not connected"; fi
-        fi
-        plugged && { adb shell pidof $APP >/dev/null 2>&1 && echo "📱 Phone app: open" || echo "📱 Phone app: closed"; }
-        ;;
-    esac
-    pgrep -qf aeasy-server && echo "🖥  Server: running" || echo "🖥  Server: stopped"
-    # only this server run: the log is append-only and quality is auto-lowered live now,
-    # so an old LAGGY line would recommend tuning forever
-    if tail -r "$LOG" 2>/dev/null | sed -n '1,/listening on/p' | grep -q 'LAGGY'; then
-      echo "🐢 Lag detected — quality was lowered automatically (secondary panes first)"
+    migrate >/dev/null 2>&1
+    slots=($(dev_slots))
+    if (( ! ${#slots} )); then warn_no_devices; else
+      h=$(input_holder) && hn="$(dev_name $h)" || hn="nobody"
+      print -r -- "📱 ${#slots} of $MAX_DEVICES devices · input: $hn"
+      for s in $slots; do with_dev $s status_slot; done
     fi
-    pgrep -qf "aeasy _watch" && echo "👀 Watcher: running" || echo "👀 Watcher: stopped"
-    echo "🧩 Sources: $("$0" sources)"
-    [[ -f "$CFG" ]] && { echo "⚙️  config:"; sed 's/^/    /' "$CFG"; }
+    pgrep -qf "aeasy _watch" && print -r -- "👀 Watcher: running" || print -r -- "👀 Watcher: stopped"
     true
     ;;
   config|--config)
-    # ponytail: relaunch-to-front — a fresh launch is the only no-permission way to
-    # get an unbundled app's window on top; state lives in the config file anyway
-    pkill -f "$CONFIGAPP" 2>/dev/null
-    "$CONFIGAPP" &!
-    echo "⚙️  Settings window opened"
+    migrate >/dev/null 2>&1
+    slot=$(pick_slot "$2") || { warn_no_devices; exit 1 }
+    # ponytail: relaunch-to-front — a fresh launch is the only no-permission way to get an
+    # unbundled app's window on top. Scoped to this slot so two devices' windows coexist.
+    pkill -f "aeasy-confi[g] --slot $slot" 2>/dev/null
+    AEASY_DIR="$SHARE/dev/$slot" AEASY_PORT=$(dev_port $slot) "$CONFIGAPP" --slot $slot &!
+    print -r -- "⚙️  Settings window opened for $(dev_name $slot)"
     ;;
   tune)
-    mkdir -p "$SHARE"
-    { grep -vE '^(FPS|BITRATE|SCALE|AUTO)=' "$CFG" 2>/dev/null; echo "FPS=15"; echo "BITRATE=1500000"; echo "SCALE=60"; } > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
-    echo "⚡ Low-latency preset: 15fps / 1.5Mbps / 60% resolution (good for budget phones)"
-    echo "   fine-tune: aeasy config"
+    migrate || exit 1
+    slots=($(dev_slots))
+    (( ${#slots} )) || { warn_no_devices; exit 1 }
+    # a global quality preset restarting every device is what the user asked for by
+    # typing a global command; add/remove is what must not disturb the others
+    for s in $slots; do
+      conf_set "$SHARE/dev/$s/config" '^(FPS|BITRATE|SCALE|AUTO)=' "FPS=15" "BITRATE=1500000" "SCALE=60"
+    done
+    print -r -- "⚡ Low-latency preset on all ${#slots} devices: 15fps / 1.5Mbps / 60% resolution"
+    print -r -- "   fine-tune one device: aeasy config <id>"
     session_restart >/dev/null 2>&1
     ;;
   wifi)
-    if [[ "$(platform)" == "ios" || -n "$2" ]]; then
+    migrate || exit 1
+    slot=$(pick_slot "$2") || { warn_no_devices; exit 1 }
+    [[ -n "$(as_slot "$2" 2>/dev/null)" ]] && ip="$3" || ip="$2"
+    if [[ "$(dev_plat $slot)" == ios ]]; then
       # iOS: no discovery on purpose — the app shows its IP on screen; type it here
-      if [[ -z "$2" ]]; then echo "usage: aeasy wifi <ip>   (the AEasy app on the device shows its IP)"; exit 1; fi
-      { grep -vE '^IOS_ADDR=' "$CFG" 2>/dev/null; echo "IOS_ADDR=$2"; } > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
-      relay_kill; relay_ensure
-      echo "📶 iOS wireless mode on ($2) — you can unplug the cable now (back to USB: aeasy usb)"
-      echo "   note: iOS will ask once for Local Network permission"
+      if [[ -z "$ip" ]]; then print -r -- "usage: aeasy wifi <id> <ip>   (the AEasy app on the device shows its IP)"; exit 1; fi
+      with_dev $slot conf_set "$SHARE/dev/$slot/config" '^IOS_ADDR=' "IOS_ADDR=$ip"
+      with_dev $slot relay_kill; with_dev $slot relay_ensure
+      print -r -- "📶 iOS wireless mode on ($ip) — you can unplug the cable now (back to USB: aeasy usb $slot)"
+      print -r -- "   note: iOS will ask once for Local Network permission"
     else
-      if [[ "$(command adb -d get-state 2>/dev/null)" != "device" ]]; then
-        echo "⚠️  Plug in the USB cable first — it's only needed once to enable Wi-Fi mode" >&2; exit 1
+      serial=$(dev_serial $slot)
+      if ! dev_online "$serial"; then
+        print -u2 -r -- "⚠️  Plug $(dev_name $slot) in over USB first — it's only needed once to enable Wi-Fi mode"; exit 1
       fi
-      command adb -d tcpip 5555 >/dev/null; sleep 1
+      command adb -s "$serial" tcpip 5555 >/dev/null; sleep 1
       # `ip route get` names the src field explicitly — positional $9 broke on devices
       # whose first wlan line is a default route or carries a `table` column
-      IP=$(command adb -d shell ip route get 1.1.1.1 2>/dev/null \
+      IP=$(command adb -s "$serial" shell ip route get 1.1.1.1 2>/dev/null \
         | awk '{for(i=1;i<NF;i++) if($i=="src"){print $(i+1); exit}}')
-      [[ -z "$IP" ]] && IP=$(command adb -d shell ip route 2>/dev/null \
+      [[ -z "$IP" ]] && IP=$(command adb -s "$serial" shell ip route 2>/dev/null \
         | awk '/dev wlan/ && /src/ {for(i=1;i<NF;i++) if($i=="src"){print $(i+1); exit}}')
-      if [[ -z "$IP" ]]; then echo "⚠️  Couldn't find the phone's IP — is it on Wi-Fi?" >&2; exit 1; fi
-      command adb connect "$IP:5555" >/dev/null || { echo "⚠️  adb connect $IP:5555 failed" >&2; exit 1; }
-      mkdir -p "$SHARE"
-      { grep -vE '^WIFI_ADDR=' "$CFG" 2>/dev/null; echo "WIFI_ADDR=$IP:5555"; } > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
-      echo "📶 Wireless mode on ($IP:5555) — you can unplug the cable now (back to USB: aeasy usb)"
+      IP=$(print -r -- "$IP" | tr -d '\r')
+      if [[ -z "$IP" ]]; then print -u2 -r -- "⚠️  Couldn't find the phone's IP — is it on Wi-Fi?"; exit 1; fi
+      command adb connect "$IP:5555" >/dev/null || { print -u2 -r -- "⚠️  adb connect $IP:5555 failed"; exit 1 }
+      # the wireless serial IS ip:port, so the registry entry moves with it
+      lock_take
+      reg_set "$slot" android "$IP:5555"
+      conf_set "$SHARE/dev/$slot/config" '^SERIAL=' "SERIAL=$IP:5555"
+      lock_free
+      print -r -- "📶 Wireless mode on ($IP:5555) — you can unplug the cable now (back to USB: aeasy usb $slot)"
     fi
     ;;
   usb)
-    W=$(conf WIFI_ADDR)
-    [[ -n "$W" ]] && command adb disconnect "$W" >/dev/null 2>&1
-    { grep -vE '^(WIFI_ADDR|IOS_ADDR)=' "$CFG" 2>/dev/null; } > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
-    relay_kill
-    echo "🔌 Back to USB mode"
+    migrate || exit 1
+    slot=$(pick_slot "$2") || { warn_no_devices; exit 1 }
+    serial=$(dev_serial $slot)
+    if [[ "$(dev_plat $slot)" == ios ]]; then
+      with_dev $slot relay_kill
+      conf_set "$SHARE/dev/$slot/config" '^IOS_ADDR='
+      with_dev $slot relay_ensure
+    else
+      [[ "$serial" == *:* ]] && command adb disconnect "$serial" >/dev/null 2>&1
+      print -u2 -r -- "   re-add it over USB: aeasy device rm $slot && aeasy device add <usb-id>"
+    fi
+    print -r -- "🔌 Back to USB mode"
     ;;
   install-app)
-    if [[ "$(platform)" == "ios" || ! -f "$APK" && -d "$SHARE/ios-src" ]]; then
+    migrate >/dev/null 2>&1
+    slot=$(pick_slot "$2")
+    if [[ -n "$slot" && "$(dev_plat $slot)" == ios ]] || [[ ! -f "$APK" && -d "$SHARE/ios-src" ]]; then
       # free-Apple-ID flow: refresh the working copy every time (a Homebrew upgrade must
       # not leave a stale app), open Xcode, user signs with their own account and Runs.
       # $SHARE because Xcode writes the signing team and the Cellar is read-only.
       if [[ ! -d "$SHARE/ios-src" ]]; then
-        echo "⚠️  iOS app source not installed — run make install from the repo, or open ios/AEasyDisplay.xcodeproj there" >&2; exit 1
+        print -u2 -r -- "⚠️  iOS app source not installed — run make install from the repo, or open ios/AEasyDisplay.xcodeproj there"; exit 1
       fi
       rm -rf "$SHARE/ios" && cp -R "$SHARE/ios-src" "$SHARE/ios"
       open "$SHARE/ios/ios/AEasyDisplay.xcodeproj"   # ios-src keeps the repo shape: ios/ + mac/Protocol.swift
-      echo "📱 Xcode opened. One-time setup on your free Apple ID:"
-      echo "   1. Signing & Capabilities → Team → Add Account (any Apple ID, no paid program)"
-      echo "   2. Plug in the iPhone/iPad, pick it as the run destination, press Run"
-      echo "   ⚠️  Free certificates expire after 7 days — just press Run again when the app stops launching"
+      print -r -- "📱 Xcode opened. One-time setup on your free Apple ID:"
+      print -r -- "   1. Signing & Capabilities → Team → Add Account (any Apple ID, no paid program)"
+      print -r -- "   2. Plug in the iPhone/iPad, pick it as the run destination, press Run"
+      print -r -- "   ⚠️  Free certificates expire after 7 days — just press Run again when the app stops launching"
     else
-      if ! plugged; then warn_unplugged; exit 1; fi
-      adb install -r "$APK" && echo "📱 App installed on the phone"
+      # works on a device that is not added yet: that is the whole point of install-app
+      target="$2"
+      [[ -n "$slot" && -z "$target" ]] && target=$(dev_serial $slot)
+      [[ -n "$(as_slot "$target" 2>/dev/null)" ]] && target=$(dev_serial "$(as_slot "$target")")
+      if [[ -z "$target" ]]; then
+        ids=(${(f)"$(command adb devices 2>/dev/null | awk '$2=="device"{print $1}')"}); ids=(${ids:#})
+        (( ${#ids} == 1 )) || { print -u2 -r -- "⚠️  name the device: aeasy install-app <id>   (aeasy device list)"; exit 1 }
+        target=$ids[1]
+      fi
+      command adb -s "$target" install -r "$APK" && print -r -- "📱 App installed on $target"
     fi
     ;;
   uninstall)
-    echo -n "Remove aeasy from this Mac (and the phone app if plugged in)? [y/N] "
-    read -q REPLY || { echo; echo "cancelled"; exit 1 }
-    echo
+    print -n -- "Remove aeasy from this Mac (and the phone app on every added device)? [y/N] "
+    read -q REPLY || { print -r -- ""; print -r -- "cancelled"; exit 1 }
+    print -r -- ""
     "$0" stop >/dev/null 2>&1
     pkill -f aeasy-tray 2>/dev/null
-    plugged && adb uninstall $APP >/dev/null 2>&1 && echo "📱 Phone app removed"
+    for s in $(dev_slots); do
+      [[ "$(dev_plat $s)" == android ]] || continue
+      serial=$(dev_serial $s)
+      dev_online "$serial" && command adb -s "$serial" uninstall $APP >/dev/null 2>&1 \
+        && print -r -- "📱 Phone app removed from $(dev_name $s)"
+    done
     rm -rf "$SHARE"
     rm -f "$HOME/.local/bin/aeasy"
     # remove the block install.sh appended (marker comment .. alias line)
     sed -i '' '/^# AEasy Display — Android USB second screen$/,/^alias aez=/d' ~/.zshrc 2>/dev/null
-    [[ "$0" == *Cellar* ]] && echo "   installed via Homebrew — also run: brew uninstall aeasy"
-    echo "🗑  Uninstalled — open a new terminal to drop the PATH/alias"
+    [[ "$0" == *Cellar* ]] && print -r -- "   installed via Homebrew — also run: brew uninstall aeasy"
+    print -r -- "🗑  Uninstalled — open a new terminal to drop the PATH/alias"
     ;;
   log)
-    tail -20 "$LOG"
+    migrate >/dev/null 2>&1
+    if [[ -n "$2" ]]; then
+      slot=$(as_slot "$2") || { print -u2 -r -- "⚠️  not an added device: $2"; exit 1 }
+      tail -20 "$SHARE/dev/$slot/server.log"
+    else
+      for s in $(dev_slots); do
+        print -r -- "── slot $s · $(dev_name $s)"
+        tail -20 "$SHARE/dev/$s/server.log" 2>/dev/null | sed 's/^/   /'
+      done
+    fi
     ;;
   _watch)
     watch_loop
@@ -337,55 +841,71 @@ case "${1:-start}" in
     if [[ "$2" == "--th" || "$2" == "th" ]]; then
       cat <<'EOF'
 aeasy — ใช้มือถือ Android หรือ iPhone/iPad เป็นจอเสริมของ Mac ผ่านสาย USB (alias: aez)
+ต่อได้พร้อมกันสูงสุด 3 เครื่อง แต่ละเครื่องเป็นจอของตัวเอง
 
-  aeasy start          เริ่มจอเสริม + เฝ้าสายอัตโนมัติ (Android: แอปเด้งเอง / iOS: เปิดแอปเอง)
+  aeasy start          เริ่มจอเสริมทุกเครื่องที่เพิ่มไว้ + เฝ้าสายอัตโนมัติ
   aeasy stop           หยุดทั้งหมด
-  aeasy status         ดูสถานะ สาย / เซิร์ฟเวอร์ / แอปมือถือ / config
-  aeasy app            เปิดแอปบนมือถือ (iOS เปิดจากเครื่องเองเท่านั้น)
-  aeasy mirror <แอพ>   mirror เฉพาะหน้าต่างแอพเดียว เช่น: aeasy mirror Safari
-  aeasy screen         กลับเป็นโหมดจอเสริมเต็มจอ
-  aeasy sources [ลิสต์] ดู/ตั้งแหล่งภาพได้สูงสุด 3 อัน แสดงซ้อนกันบนมือถือ
+  aeasy status         ดูสถานะทุกเครื่อง สาย / เซิร์ฟเวอร์ / แอปมือถือ / config
+
+  aeasy device list            ดูอุปกรณ์ทั้งหมดที่ Mac มองเห็น (เพิ่มแล้วหรือยัง / ติดตั้งแอพหรือยัง)
+  aeasy device add <id>        เพิ่มเครื่อง (สูงสุด 3) — เครื่องเดิมที่กำลังสตรีมไม่สะดุด
+  aeasy device rm <id|slot>    เอาออก (ค่าที่ตั้งไว้ยังอยู่ ถ้าเพิ่มกลับมาจะได้คืน)
+  aeasy device input <id|slot> เลือกว่าเครื่องไหนคุมเมาส์ Mac (ได้ทีละเครื่องเท่านั้น)
+
+  aeasy app [id]       เปิดแอปบนมือถือ (iOS เปิดจากเครื่องเองเท่านั้น)
+  aeasy mirror <แอพ> [id]  mirror เฉพาะหน้าต่างแอพเดียว เช่น: aeasy mirror Safari
+  aeasy screen [id]    กลับเป็นโหมดจอเสริมเต็มจอ
+  aeasy sources [id] [ลิสต์] ดู/ตั้งแหล่งภาพได้สูงสุด 3 อันต่อเครื่อง แสดงซ้อนกันบนมือถือ
                        เช่น: aeasy sources display,window:Safari  (ลากจัดตำแหน่งได้ในแอป Android)
-  aeasy config         เปิดหน้าต่างตั้งค่า (fps / bitrate / ความละเอียด)
-  aeasy tune           ตั้งค่าโหมดลื่นสำหรับมือถือช้า (15fps / 60%) — ใช้เมื่อภาพหน่วง
-  aeasy wifi [ip]      โหมดไร้สาย (Android: เสียบสายครั้งเดียว / iOS: พิมพ์ IP ที่แอปโชว์)
-  aeasy usb            กลับมาใช้สาย USB
-  aeasy restart        รีสตาร์ทจอเสมือน
-  aeasy install-app    Android: ติดตั้ง APK / iOS: เปิด Xcode ให้ sign ด้วย Apple ID ตัวเอง (ฟรี)
-  aeasy uninstall      ถอนการติดตั้งทั้งหมดออกจาก Mac (รวมแอปบนมือถือถ้าเสียบสายอยู่)
-  aeasy log            ดู log ล่าสุดของเซิร์ฟเวอร์
+  aeasy config [id]    เปิดหน้าต่างตั้งค่าของเครื่องนั้น (fps / bitrate / ความละเอียด / เลือกจอ)
+  aeasy tune           ตั้งค่าโหมดลื่นให้ทุกเครื่อง (15fps / 60%) — ใช้เมื่อภาพหน่วง
+  aeasy wifi <id> [ip] โหมดไร้สาย (Android: เสียบสายครั้งเดียว / iOS: พิมพ์ IP ที่แอปโชว์)
+  aeasy usb [id]       กลับมาใช้สาย USB
+  aeasy restart [id]   รีสตาร์ทจอเสมือน (ไม่ใส่ id = ทุกเครื่อง)
+  aeasy install-app [id] Android: ติดตั้ง APK / iOS: เปิด Xcode ให้ sign ด้วย Apple ID ตัวเอง (ฟรี)
+  aeasy uninstall      ถอนการติดตั้งทั้งหมดออกจาก Mac
+  aeasy log [id]       ดู log ล่าสุดของเซิร์ฟเวอร์
 
   iOS ต้องมี: brew install libusbmuxd libimobiledevice socat
   ข้อจำกัด iOS: ล็อกหน้าจอ = หยุดสตรีม, cert ฟรีหมดอายุทุก 7 วัน (กด Run ใน Xcode ใหม่)
+  เครื่องที่ยังไม่ติดตั้งแอพจะขึ้นใน device list พร้อมวิธีติดตั้ง (Android เท่านั้นที่เช็คได้)
 EOF
     else
       cat <<'EOF'
 aeasy — use an Android phone or iPhone/iPad as a second display for your Mac over USB (alias: aez)
+Up to 3 devices at once, each its own extended display.
 
-  aeasy start          start the display + cable watcher (Android auto-launches the app; iOS: open it yourself)
+  aeasy start          start every added device + the cable watcher
   aeasy stop           stop everything
-  aeasy status         show cable / server / device-app status and config
-  aeasy app            launch the viewer app (iOS can only be opened on the device)
-  aeasy mirror <App>   mirror a single app window, e.g.: aeasy mirror Safari
-  aeasy screen         back to full extended-display mode
-  aeasy sources [list] show/set up to 3 sources shown as panes on the phone
+  aeasy status         show every device's cable / server / app status and config
+
+  aeasy device list            every device the Mac can see, added or not, with app status
+  aeasy device add <id>        add a device (max 3) — devices already streaming are not interrupted
+  aeasy device rm <id|slot>    remove one (its settings are kept for when you add it back)
+  aeasy device input <id|slot> pick which device controls the Mac cursor (only one at a time)
+
+  aeasy app [id]       launch the viewer app (iOS can only be opened on the device)
+  aeasy mirror <App> [id]  mirror a single app window, e.g.: aeasy mirror Safari
+  aeasy screen [id]    back to full extended-display mode
+  aeasy sources [id] [list] show/set up to 3 sources per device, shown as panes on the phone
                        e.g.: aeasy sources display,window:Safari  (drag to arrange in the Android app)
-  aeasy config         open the settings GUI (fps / bitrate / resolution)
-  aeasy tune           low-latency preset for slower devices (15fps / 60%) — use when laggy
-  aeasy wifi [ip]      wireless mode (Android: cable once to enable; iOS: type the IP the app shows)
-  aeasy usb            switch back to USB mode
-  aeasy restart        restart the virtual display
-  aeasy install-app    Android: install the APK / iOS: open Xcode to sign with your own free Apple ID
-  aeasy uninstall      remove aeasy from this Mac (and the phone app if plugged in)
-  aeasy log            tail the server log
+  aeasy config [id]    open that device's settings GUI (fps / bitrate / resolution / device picker)
+  aeasy tune           low-latency preset on every device (15fps / 60%) — use when laggy
+  aeasy wifi <id> [ip] wireless mode (Android: cable once to enable; iOS: type the IP the app shows)
+  aeasy usb [id]       switch back to USB mode
+  aeasy restart [id]   restart the virtual display (no id = every device)
+  aeasy install-app [id] Android: install the APK / iOS: open Xcode to sign with your own free Apple ID
+  aeasy uninstall      remove aeasy from this Mac
+  aeasy log [id]       tail the server log
 
   iOS needs: brew install libusbmuxd libimobiledevice socat
   iOS limits: locking the screen stops the stream; free certs expire every 7 days (press Run again)
+  Devices without the app show up in `device list` with install instructions (Android check only)
 
   aeasy --help --th    แสดงเป็นภาษาไทย
 EOF
     fi
     ;;
   *)
-    echo "unknown command: $1 (see aeasy --help)"; exit 1 ;;
+    print -u2 -r -- "unknown command: $1 (see aeasy --help)"; exit 1 ;;
 esac

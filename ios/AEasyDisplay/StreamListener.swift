@@ -25,7 +25,10 @@ final class StreamListener {
                 queue.asyncAfter(deadline: .now() + 1) { [weak self] in self?.restart() }
                 return
             }
-            l.newConnectionLimit = 1       // one fullscreen pane in phase 1, by construction
+            // no newConnectionLimit: it decrements per accepted connection, and at 0
+            // the listener stops accepting forever — a Mac restart could never
+            // reconnect. accept() already keeps one live connection by cancelling
+            // the previous one.
             l.newConnectionHandler = { [weak self] c in self?.accept(c) }
             l.start(queue: queue)
             listener = l

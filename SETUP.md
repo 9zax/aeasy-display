@@ -109,7 +109,9 @@ echo "PLATFORM=ios" >> ~/.local/share/aeasy/config && aeasy restart   # use the 
 | Xcode: "signing certificate is revoked" | Pick the team again with **Automatically manage signing** on — Xcode issues a new one |
 | Xcode: device's iOS version not supported | Update Xcode from the App Store |
 | Laggy / stuttering | It auto-tunes per stream already; for slow devices run `aeasy tune` |
-| Wrong device picked (several attached) | Android: unplug the extra. iOS: set `UDID=<id>` in the config (`idevice_id -l` lists them) |
+| Several devices attached | Not a problem any more — `aeasy device list` shows them all and `aeasy device add <id>` picks which ones to drive (up to 3) |
+| Taps from one device do nothing | Only one device controls the cursor. `aeasy device input <id>` hands it over |
+| A device is listed but can't be added | It has no viewer app yet (`aeasy install-app <id>`), or it is `unauthorized`/untrusted — accept the prompt on the device |
 | iOS display is too dense / too small | Set `IOS_SCALE=0.8` (smaller desktop, bigger text) or up to `2.0` in the config |
 | Wi-Fi mode can't connect (iOS) | Re-check the IP the app shows; both machines on the same network; `aeasy status` says reachable? |
 

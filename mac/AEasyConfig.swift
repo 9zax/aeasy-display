@@ -11,6 +11,56 @@ let shareDir = NSString(string: ProcessInfo.processInfo.environment["AEASY_DIR"]
 let cfgPath = shareDir + "/config"
 // matches the server's override so the settings window can be pointed at a test instance
 let CTL_PORT = UInt16(ProcessInfo.processInfo.environment["AEASY_PORT"] ?? "") ?? 7355
+// this window edits exactly one device; `aeasy config <id>` exports the two variables
+// above and passes --slot so a second window for another device can coexist
+let SLOT: Int = {
+    let a = CommandLine.arguments
+    guard let i = a.firstIndex(of: "--slot"), i + 1 < a.count, let n = Int(a[i + 1]) else { return 0 }
+    return n
+}()
+let aeasyCLI = "\(NSHomeDirectory())/.local/bin/aeasy"
+
+func shellOut(_ cmd: String) -> String {
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/bin/zsh")
+    p.arguments = ["-c", cmd]
+    let pipe = Pipe()
+    p.standardOutput = pipe
+    p.standardError = FileHandle.nullDevice
+    do { try p.run() } catch { return "" }
+    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+    p.waitUntilExit()
+    return String(data: data, encoding: .utf8) ?? ""
+}
+
+@discardableResult
+func shellRun(_ cmd: String) -> Int32 {
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/bin/zsh")
+    p.arguments = ["-c", cmd]
+    p.standardOutput = FileHandle.nullDevice
+    p.standardError = FileHandle.nullDevice
+    try? p.run()
+    p.waitUntilExit()
+    return p.terminationStatus
+}
+
+struct DevRow {
+    let slot: String, serial: String, platform: String
+    let conn: String, app: String, state: String, name: String
+    var added: Bool { slot != "-" }
+    var installed: Bool { app != "no" }
+    var ready: Bool { state == "device" }
+}
+
+func deviceRows() -> [DevRow] {
+    shellOut("'\(aeasyCLI)' device list --raw").split(separator: "\n").compactMap { line in
+        let f = line.components(separatedBy: "\t")
+        guard f.count >= 7 else { return nil }
+        return DevRow(slot: f[0], serial: f[1], platform: f[2],
+                      conn: f[3], app: f[4], state: f[5], name: f[6])
+    }
+}
 
 func loadConf() -> [String: String] {
     var c: [String: String] = [:]
@@ -139,6 +189,9 @@ final class PaneCanvasView: NSView {
     var connected = false { didSet { needsDisplay = true } }
     var onEdit: (([CanvasPane]) -> Void)?
 
+    // one color per source slot, matched by pane order (source order)
+    static let palette: [NSColor] = [.systemBlue, .systemOrange, .systemGreen]
+
     private var dragIndex: Int?
     private var resizing = false
     private var grabDX = 0.0, grabDY = 0.0
@@ -167,15 +220,16 @@ final class PaneCanvasView: NSView {
         NSColor.black.setFill()
         NSBezierPath(roundedRect: s, xRadius: 6, yRadius: 6).fill()
 
-        for p in panes.sorted(by: { $0.z < $1.z }) {
+        for (i, p) in panes.enumerated().sorted(by: { $0.element.z < $1.element.z }) {
+            let tint = PaneCanvasView.palette[i % PaneCanvasView.palette.count]
             let r = rect(p)
-            NSColor.controlAccentColor.withAlphaComponent(0.28).setFill()
+            tint.withAlphaComponent(0.28).setFill()
             r.fill()
-            NSColor.controlAccentColor.setStroke()
+            tint.setStroke()
             let path = NSBezierPath(rect: r)
             path.lineWidth = 2
             path.stroke()
-            NSColor.controlAccentColor.setFill()
+            tint.setFill()
             CGRect(x: r.maxX - 12, y: r.maxY - 12, width: 12, height: 12).fill()
             let label = p.src == "display" ? "Extended display"
                       : p.src.replacingOccurrences(of: "window:", with: "")
@@ -251,6 +305,12 @@ final class App: NSObject, NSApplicationDelegate {
     let bitrateLabel = NSTextField(labelWithString: "")
     let scaleLabel = NSTextField(labelWithString: "")
     let codec = NSPopUpButton(frame: .zero, pullsDown: false)
+    let devicePick = NSPopUpButton(frame: .zero, pullsDown: false)
+    let panelLock = NSButton(checkboxWithTitle: "Lock resolution / ล็อกความละเอียด", target: nil, action: nil)
+    let panelField = NSTextField(string: "")
+    let inputCheck = NSButton(checkboxWithTitle: "This device controls the Mac / ให้เครื่องนี้ควบคุม Mac",
+                              target: nil, action: nil)
+    var devices: [DevRow] = []
     var sourcePicks: [NSPopUpButton] = []
     let canvas = PaneCanvasView()
     let status = NSTextField(labelWithString: " ")
@@ -297,6 +357,28 @@ final class App: NSObject, NSApplicationDelegate {
 
         for s in [fps, bitrate, scale] { s.target = self; s.action = #selector(changed) }
 
+        // one window per device: switching relaunches through `aeasy config <slot>`, which
+        // is what sets AEASY_DIR/AEASY_PORT. shareDir and CTL_PORT are file-scope lets, so
+        // there is nothing to re-point in place — the flicker buys a UI with no device
+        // parameter threaded through every path that touches them.
+        devices = deviceRows()
+        rebuildDevicePicker()
+        devicePick.target = self
+        devicePick.action = #selector(devicePicked)
+
+        panelLock.target = self
+        panelLock.action = #selector(panelToggled)
+        panelField.placeholderString = "1080 2400"
+        panelField.widthAnchor.constraint(equalToConstant: 120).isActive = true
+        if let p = c["PANEL"], !p.isEmpty {
+            panelLock.state = .on
+            panelField.stringValue = p
+        }
+        panelField.isEnabled = panelLock.state == .on
+        inputCheck.state = (c["INPUT"] ?? "1") == "1" ? .on : .off
+        inputCheck.target = self
+        inputCheck.action = #selector(inputToggled)
+
         let save = NSButton(title: "Save & Restart", target: self, action: #selector(saveTapped))
         save.keyEquivalent = "\r"
 
@@ -322,9 +404,12 @@ final class App: NSObject, NSApplicationDelegate {
         restartNote.textColor = .secondaryLabelColor
 
         let stack = NSStackView(views: [
+            row("Device", devicePick),
+            row("", inputCheck),
             row("Frame rate", fps), row("", fpsLabel),
             row("Bitrate", bitrate), row("", bitrateLabel),
             row("Resolution", scale), row("", scaleLabel),
+            row("", panelLock), row("Locked size", panelField),
             row("Codec", codec),
             row("Source 1", sourcePicks[0]),
             row("Source 2", sourcePicks[1]),
@@ -336,10 +421,19 @@ final class App: NSObject, NSApplicationDelegate {
         stack.alignment = .leading
         stack.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
 
+        // the device rows push the content past 700 pt on a 13" laptop, and a resizable
+        // window can grow but not shrink its content — so scroll, and stay resizable
+        stack.setFrameSize(stack.fittingSize)
+        let scroll = NSScrollView()
+        scroll.hasVerticalScroller = true
+        scroll.drawsBackground = false
+        scroll.documentView = stack
+
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 700),
-                          styleMask: [.titled, .closable], backing: .buffered, defer: false)
-        window.title = "AEasy Display — Settings"
-        window.contentView = stack
+                          styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+        window.title = "AEasy Display — Settings" + (devices.first { $0.slot == String(SLOT) }
+            .map { " — \($0.name)" } ?? "")
+        window.contentView = scroll
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.setActivationPolicy(.regular)
@@ -406,14 +500,130 @@ final class App: NSObject, NSApplicationDelegate {
         link.send(["t": "layout", "panes": arr, "tok": token])
     }
 
+    private static let ADD_ITEM = "Add Device…"
+
+    private func rebuildDevicePicker() {
+        devicePick.removeAllItems()
+        for d in devices where d.added {
+            devicePick.addItem(withTitle: "\(d.name)  (slot \(d.slot))")
+            devicePick.lastItem?.representedObject = d
+        }
+        if devicePick.numberOfItems == 0 { devicePick.addItem(withTitle: "No devices added") }
+        devicePick.menu?.addItem(.separator())
+        devicePick.addItem(withTitle: App.ADD_ITEM)
+        if let i = devices.firstIndex(where: { $0.slot == String(SLOT) }) {
+            let addedBefore = devices[..<i].filter { $0.added }.count
+            if devices[i].added { devicePick.selectItem(at: addedBefore) }
+        }
+    }
+
+    @objc func devicePicked() {
+        guard let title = devicePick.titleOfSelectedItem else { return }
+        if title == App.ADD_ITEM { showAddSheet(); return }
+        guard let d = devicePick.selectedItem?.representedObject as? DevRow, d.slot != String(SLOT) else { return }
+        // relaunch through the CLI, which owns the env and scopes its own pkill to the
+        // target slot; then terminate, in that order, so the two never race for the window
+        shellRun("'\(aeasyCLI)' config \(d.slot)")
+        NSApp.terminate(nil)
+    }
+
+    private func showAddSheet() {
+        rebuildDevicePicker()   // undo the selection so the popup doesn't stick on "Add Device…"
+        devices = deviceRows()
+        let candidates = devices.filter { !$0.added }
+        let alert = NSAlert()
+        alert.messageText = "Add a device / เพิ่มอุปกรณ์"
+        if candidates.isEmpty {
+            alert.informativeText = """
+            Nothing new is connected. Plug a phone or tablet in over USB with USB debugging on.
+
+            ไม่พบเครื่องใหม่ — เสียบมือถือหรือแท็บเล็ตผ่าน USB โดยเปิด USB debugging ไว้
+            """
+            alert.runModal()
+            return
+        }
+        let pick = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 380, height: 26))
+        for d in candidates {
+            var t = "\(d.name) — \(d.platform) · \(d.conn)"
+            if !d.ready { t += " · \(d.state)" }
+            else if !d.installed { t += " · app not installed" }
+            pick.addItem(withTitle: t)
+            pick.lastItem?.representedObject = d
+        }
+        alert.accessoryView = pick
+        alert.addButton(withTitle: "Add")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn,
+              let d = pick.selectedItem?.representedObject as? DevRow else { return }
+        // a device without the app, or one that has not accepted the USB-debugging prompt,
+        // cannot be added — say what to do instead of failing silently
+        if !d.ready || !d.installed {
+            let a2 = NSAlert()
+            a2.messageText = "\(d.name) is not ready yet"
+            a2.informativeText = !d.ready
+                ? """
+                Unlock the device and accept the prompt on its screen, then try again.
+
+                ปลดล็อกเครื่องแล้วกดอนุญาตบนหน้าจอเครื่อง จากนั้นลองใหม่
+                """
+                : """
+                Install the viewer app first:
+
+                    aeasy install-app \(d.serial)
+
+                ติดตั้งแอพก่อน:
+
+                    aeasy install-app \(d.serial)
+                """
+            a2.runModal()
+            return
+        }
+        shellRun("'\(aeasyCLI)' device add \(d.serial)")
+        devices = deviceRows()
+        rebuildDevicePicker()
+        status.stringValue = "➕ Added \(d.name)"
+    }
+
+    @objc func panelToggled() {
+        panelField.isEnabled = panelLock.state == .on
+        if panelLock.state == .on, panelField.stringValue.isEmpty {
+            // seed from the size the server is actually running at
+            let dims = (try? String(contentsOfFile: shareDir + "/dims", encoding: .utf8))?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            panelField.stringValue = dims
+        }
+    }
+
+    // clear-then-set lives in the CLI, so ticking this box also unticks every other device
+    @objc func inputToggled() {
+        guard inputCheck.state == .on else {
+            inputCheck.state = .on   // something must hold input; untick by ticking another device
+            status.stringValue = "Pick another device to hand control over."
+            return
+        }
+        shellRun("'\(aeasyCLI)' device input \(SLOT)")
+        status.stringValue = "🖱 This device controls the Mac"
+    }
+
     @objc func changed() {
         fpsLabel.stringValue = "\(Int(fps.doubleValue)) fps"
         bitrateLabel.stringValue = String(format: "%.1f Mbps", bitrate.doubleValue)
         scaleLabel.stringValue = "\(Int(scale.doubleValue))% of phone panel"
-        // relabel the canvas panes to the picked sources right away; the real layout
-        // (including added/removed panes) still arrives from the server after restart
+        // reconcile the canvas panes to the picked sources right away, mirroring the
+        // server's defaultPane; the authoritative layout still arrives after restart
         let ids = pickedSources()
-        for i in canvas.panes.indices where i < ids.count { canvas.panes[i].src = ids[i] }
+        var panes = canvas.panes
+        for i in panes.indices where i < ids.count { panes[i].src = ids[i] }
+        if ids.count < panes.count { panes.removeSubrange(ids.count...) }
+        let ox = 24.0 / canvas.viewport.width, oy = 24.0 / canvas.viewport.height
+        for i in panes.count..<ids.count {
+            let k = Double(max(0, i - 1))
+            panes.append(i == 0
+                ? CanvasPane(src: ids[i], x: 0, y: 0, w: 1, h: 1, z: 0)
+                : CanvasPane(src: ids[i], x: max(0, 0.58 - ox * k), y: max(0, 0.68 - oy * k),
+                             w: 0.4, h: 0.3, z: i))
+        }
+        canvas.panes = panes
     }
 
     @objc func saveTapped() {
@@ -426,15 +636,24 @@ final class App: NSObject, NSApplicationDelegate {
         c["MODE"] = nil          // superseded by SOURCES
         c["WINDOW_APP"] = nil
         c["AUTO"] = nil          // quality is stepped down live now, no restart ladder
-        let conf = c.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "\n")
+        // a malformed PANEL is dropped rather than written: the server would ignore it and
+        // silently auto-size, which looks like the lock not working
+        let panel = panelField.stringValue.split(separator: " ").compactMap { Int($0) }
+        c["PANEL"] = (panelLock.state == .on && panel.count == 2 && panel[0] > 0 && panel[1] > 0)
+            ? "\(panel[0]) \(panel[1])" : nil
+        // trailing newline matters: bin/aeasy appends keys to this file, and without it the
+        // appended line would splice onto the last key
+        let conf = c.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "\n") + "\n"
         try? FileManager.default.createDirectory(atPath: (cfgPath as NSString).deletingLastPathComponent,
                                                  withIntermediateDirectories: true)
         try? conf.write(toFile: cfgPath, atomically: true, encoding: .utf8)
+        // this slot only: a global restart would drop every other device's stream to apply
+        // one device's bitrate change
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        p.arguments = ["-c", "\(NSHomeDirectory())/.local/bin/aeasy restart"]
+        p.arguments = ["-c", "'\(aeasyCLI)' restart \(SLOT)"]
         try? p.run()
-        status.stringValue = "✅ Saved — restarting the stream..."
+        status.stringValue = "✅ Saved — restarting this device's stream..."
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { true }

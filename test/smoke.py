@@ -47,14 +47,30 @@ def check(name, covers, cond, detail=""):
 # --- server lifecycle -------------------------------------------------------
 
 class Server:
-    def __init__(self, sources, bitrate=2000000, reuse_dir=None):
+    # port/panel/slot are per instance, not module constants: the multi-device suite runs
+    # two or three of these at once, and two instances on one port cannot both bind.
+    def __init__(self, sources, bitrate=2000000, reuse_dir=None,
+                 port=PORT, panel=PANEL, slot=None, extra_conf=()):
         self.dir = reuse_dir or tempfile.mkdtemp(prefix="aeasy-smoke-")
+        self.port = port
+        self.slot = slot if slot is not None else (port - PORT) // 10
         conf = [f"SOURCES={sources}", "FPS=20", "SCALE=60", "CODEC=h264", f"BITRATE={bitrate}"]
+        conf += list(extra_conf)
         with open(os.path.join(self.dir, "config"), "w") as f:
-            f.write("\n".join(conf))
+            f.write("\n".join(conf) + "\n")
         self.log = open(os.path.join(self.dir, "server.log"), "w+")
-        env = dict(os.environ, AEASY_DIR=self.dir, AEASY_PORT=str(PORT))
-        self.p = subprocess.Popen([SERVER, *PANEL], stdout=self.log, stderr=subprocess.STDOUT, env=env)
+        env = dict(os.environ, AEASY_DIR=self.dir, AEASY_PORT=str(port))
+        argv = [SERVER, *panel, "--slot", str(self.slot)]
+        self.p = subprocess.Popen(argv, stdout=self.log, stderr=subprocess.STDOUT, env=env)
+
+    def set_conf(self, key, value):
+        """Rewrite one key in this server's config, the way the tray and the GUI do."""
+        path = os.path.join(self.dir, "config")
+        with open(path) as f:
+            lines = [l for l in f.read().splitlines() if not l.startswith(key + "=")]
+        lines.append(f"{key}={value}")
+        with open(path, "w") as f:
+            f.write("\n".join(lines) + "\n")
 
     def wait_ready(self, timeout=15):
         deadline = time.time() + timeout
@@ -89,14 +105,14 @@ class Server:
 
 # --- client helpers ---------------------------------------------------------
 
-def connect(timeout=3):
-    s = socket.create_connection(("127.0.0.1", PORT), timeout=timeout)
+def connect(timeout=3, port=PORT):
+    s = socket.create_connection(("127.0.0.1", port), timeout=timeout)
     s.settimeout(timeout)
     return s
 
 
-def hello(spec):
-    s = connect()
+def hello(spec, port=PORT):
+    s = connect(port=port)
     s.sendall(b"AEZ1 " + spec.encode() + b"\n")
     return s
 
@@ -153,8 +169,8 @@ def send_ctl(s, obj):
 class Control:
     """Length-prefixed JSON control client."""
 
-    def __init__(self):
-        self.s = hello("control")
+    def __init__(self, port=PORT):
+        self.s = hello("control", port=port)
         self.buf = b""
 
     def recv(self, want_t=None, timeout=3):
@@ -449,6 +465,127 @@ def run_multi(app):
         srv.cleanup()
 
 
+# --- multi-device suite -----------------------------------------------------
+# See specs/2026-08-06-multi-device-targets.md. Two servers at once is the whole claim:
+# per-device state comes from AEASY_DIR, per-device identity from AEASY_PORT.
+
+def listens_on_loopback(port):
+    out = subprocess.run(["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN"],
+                         capture_output=True, text=True).stdout
+    return bool(out.strip()) and "127.0.0.1" in out and "*:" not in out
+
+
+def run_multi_device():
+    a = Server("display", port=PORT, slot=0)
+    b = Server("display", port=PORT + 10, slot=1, extra_conf=["INPUT=0"])
+    try:
+        if not a.wait_ready() or not b.wait_ready():
+            record("T-14 two servers coexist", "FR-15, NFR-1", False,
+                   "second server did not start:\n" + b.text())
+            return
+        check("T-14 two servers coexist", "FR-15, NFR-1", True, f"ports {a.port} and {b.port}")
+
+        # T-18: distinct display identity. serialNum is derived from the port, which is
+        # what stops macOS collapsing the two displays' saved arrangements into one.
+        check("T-18 slot 1 names its display distinctly", "FR-25",
+              "AEasy Display 2" in b.text(), "startup log names the display")
+        check("T-18 slot 0 keeps the original display name", "FR-25, NFR-4",
+              "'AEasy Display'" in a.text() or "AEasy Display id=" in a.text())
+
+        # T-19: every slot binds loopback only
+        check("T-19 both listeners are loopback-only", "NFR-3",
+              listens_on_loopback(a.port) and listens_on_loopback(b.port))
+
+        # T-16: per-device layout. A drag on slot 1 must not touch slot 0's file.
+        ca, cb = Control(port=a.port), Control(port=b.port)
+        la, lb = ca.recv("layout"), cb.recv("layout")
+        if la and lb:
+            cb.send({"t": "layout", "tok": "x",
+                     "panes": [dict(p, x=0.25) for p in lb["panes"]]})
+            cb.recv("layout")
+            time.sleep(0.8)   # the server debounces layout.json by 500 ms
+            ra = json.load(open(a.layout_path())) if os.path.exists(a.layout_path()) else {}
+            rb = json.load(open(b.layout_path())) if os.path.exists(b.layout_path()) else {}
+            check("T-16 layout is per device", "FR-3",
+                  rb.get("rev", 0) > la["rev"] and ra.get("rev", 0) == la["rev"],
+                  f"slot0 rev={ra.get('rev')} slot1 rev={rb.get('rev')}")
+        else:
+            record("T-16 layout is per device", "FR-3", False, "no layout on connect")
+
+        # T-14 (continued): adding/removing a device leaves the other's stream alone.
+        # Deliberately not asserted: "no frame gap" — ScreenCaptureKit is change-driven,
+        # so an idle desktop legitimately emits nothing for seconds at a time.
+        va = hello("display", port=a.port)
+        read_for(va, 1.5, want=lambda x: START_CODE in x)
+        subs_before = a.text().count("subscribed")
+        c = Server("display", port=PORT + 20, slot=2)
+        try:
+            c.wait_ready()
+            time.sleep(0.5)
+            still = a.text()
+            check("T-15 starting a third server does not disturb the first", "FR-15",
+                  still.count("subscribed") == subs_before and a.p.poll() is None,
+                  "no reconnect on slot 0")
+        finally:
+            c.stop(); c.cleanup()
+        check("T-15 slot 0 survives a third server's teardown", "FR-15",
+              a.p.poll() is None and b.p.poll() is None)
+
+        # T-11/T-12: input arbitration. Slot 1 was started with INPUT=0.
+        before = cursor()
+        vb = hello("display", port=b.port)
+        read_for(vb, 1.0, want=lambda x: START_CODE in x)
+        vb.sendall(touch_packet(1, 8000, 8000))
+        time.sleep(0.5)
+        mid = cursor()
+        if before is None or mid is None:
+            record("T-11 non-input device cannot move the cursor", "FR-23", False,
+                   "could not read cursor position")
+        else:
+            check("T-11 non-input device cannot move the cursor", "FR-23", before == mid,
+                  f"{before} -> {mid}")
+            # T-12: flip INPUT on disk; the change is picked up on the touch path within a
+            # second, with no restart and no reconnect.
+            b.set_conf("INPUT", "1")
+            time.sleep(1.2)
+            vb.sendall(touch_packet(1, 20000, 20000))
+            time.sleep(0.5)
+            after = cursor()
+            check("T-12 flipping INPUT transfers control without a restart", "FR-23",
+                  after is not None and after != mid and b.p.poll() is None,
+                  f"{mid} -> {after}")
+        vb.close(); va.close(); ca.close(); cb.close()
+    finally:
+        for s in (a, b):
+            s.stop(); s.cleanup()
+
+
+def run_panel_lock():
+    """T-17: PANEL pins the display size and disarms the type-3 restart."""
+    srv = Server("display", port=PORT, slot=0, panel=("720", "1650"),
+                 extra_conf=["PANEL=800 600"])
+    try:
+        if not srv.wait_ready():
+            record("T-17 PANEL locks the display size", "FR-21", False, "server did not start")
+            return
+        c = Control(port=srv.port)
+        vp = c.recv("viewport")
+        check("T-17 PANEL locks the display size", "FR-21",
+              vp and vp.get("w") == 800 and vp.get("h") == 600,
+              f"viewport={vp} (argv said 720x1650)")
+        # a type-3 reporting something else must neither write dims.ios nor exit
+        v = hello("display", port=srv.port)
+        read_for(v, 1.0, want=lambda x: START_CODE in x)
+        v.sendall(struct.pack(">BHH", 3, 390, 844))
+        time.sleep(1.0)
+        check("T-17 PANEL disarms the type-3 restart", "FR-22",
+              srv.p.poll() is None and not os.path.exists(os.path.join(srv.dir, "dims.ios")),
+              "no exit, no dims.ios")
+        v.close(); c.close()
+    finally:
+        srv.stop(); srv.cleanup()
+
+
 # --- main -------------------------------------------------------------------
 
 def main():
@@ -475,6 +612,11 @@ def main():
     else:
         print("  SKIPPED — no app with an on-screen window found "
               "(T-9, T-10, T-14, T-17 need a second source)")
+
+    print("smoke: multi-device suite")
+    run_multi_device()
+    print("smoke: panel-lock suite")
+    run_panel_lock()
 
     failed = [r for r in results if not r[2]]
     print(f"\n{len(results) - len(failed)}/{len(results)} checks passed")

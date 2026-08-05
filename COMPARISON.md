@@ -3,21 +3,27 @@
 <p align="center"><b>English</b> · <a href="COMPARISON.th.md">ภาษาไทย</a></p>
 
 Compared against the closest open source projects: [scrcpy](https://github.com/Genymobile/scrcpy), [Deskreen](https://github.com/pavlobu/deskreen), [Weylus](https://github.com/H-M-H/Weylus), [VirtScreen](https://github.com/kbumsik/VirtScreen), [Sunshine](https://github.com/LizardByte/Sunshine)+[Moonlight](https://moonlight-stream.org/)
-(Popular options like Duet Display, spacedesk, and superDisplay are excluded — they're closed source.)
+(Closed-source options like Duet Display and superDisplay are excluded. spacedesk is closed source too, but people ask about it so often that it's in the table anyway.)
 
 ## Overview — the "use another device as a second display" problem
 
-| | AEasy Display | Deskreen | Weylus | VirtScreen | Sunshine + Moonlight |
-|---|---|---|---|---|---|
-| Computer side | macOS only | Win / macOS / Linux | Win / macOS / Linux | Linux (X11) only | Win / macOS / Linux |
-| Display side | Android / iOS beta (viewer apps) | anything with a browser | anything with a browser | anything with a VNC client | Android / iOS / more (Moonlight app) |
-| Creates the virtual display for you | ✅ (`CGVirtualDisplay`) | ❌ needs a dummy plug or DIY virtual display | ⚠️ Linux only (macOS = mirror only) | ✅ (xrandr) | ❌ needs a dummy plug or BetterDisplay |
-| Transport | USB (zero network) or Wi-Fi (`aeasy wifi`) | Wi-Fi (WebRTC) | Wi-Fi (WebRTC/WebSocket) | Wi-Fi (VNC) | Wi-Fi / LAN (hw encode) |
-| Latency | low (hw encode/decode end to end) | medium–high (software encode via browser) | medium (hw encode on some platforms) | high (VNC isn't built for video) | very low (built for game streaming) |
-| Input back (touch/stylus) | ✅ tap + drag (no stylus pressure/scroll) | ❌ | ✅ its main selling point (pressure stylus — Linux only) | ✅ via VNC | ✅ (mouse/keyboard/gamepad) |
-| Auto-rotation | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Several sources at once | ✅ up to 3 panes (display + app windows), arrangeable live from either side | ❌ | ❌ | ❌ | ⚠️ one stream per session |
-| Project status | new | active, but virtual display has been "on the roadmap" for years | active | ⚠️ abandoned (last commit 2018) | very active, large community |
+| | ⭐ AEasy Display | spacedesk | Deskreen | Weylus | VirtScreen | Sunshine + Moonlight |
+|---|---|---|---|---|---|---|
+| Computer side | macOS only | Windows 10/11 only | Win / macOS / Linux | Win / macOS / Linux | Linux (X11) only | Win / macOS / Linux |
+| Display side | Android / iOS beta (viewer apps) | Android / iOS / browser / Windows viewer | anything with a browser | anything with a browser | anything with a VNC client | Android / iOS / more (Moonlight app) |
+| Open source | ✅ MIT | ❌ closed source, freeware | ✅ | ✅ | ✅ | ✅ |
+| Creates the virtual display for you | ✅ (`CGVirtualDisplay`) | ✅ (Windows display driver) | ❌ needs a dummy plug or DIY virtual display | ⚠️ Linux only (macOS = mirror only) | ✅ (xrandr) | ❌ needs a dummy plug or BetterDisplay |
+| Transport | USB (zero network) or Wi-Fi (`aeasy wifi`) | Wi-Fi / LAN / USB (via Android USB tethering) | Wi-Fi (WebRTC) | Wi-Fi (WebRTC/WebSocket) | Wi-Fi (VNC) | Wi-Fi / LAN (hw encode) |
+| Latency | low (hw encode/decode end to end) | medium (depends on network; low over USB/LAN) | medium–high (software encode via browser) | medium (hw encode on some platforms) | high (VNC isn't built for video) | very low (built for game streaming) |
+| Input back (touch/stylus) | ✅ tap + drag (no stylus pressure/scroll) | ✅ touch, pressure stylus, keyboard/mouse | ❌ | ✅ its main selling point (pressure stylus — Linux only) | ✅ via VNC | ✅ (mouse/keyboard/gamepad) |
+| Audio | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ |
+| Auto-rotation | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Several devices at once | ✅ up to 3, each its own extended display, added and removed live | ⚠️ one desktop across many devices (video wall) | ❌ | ❌ | ❌ | ❌ |
+| Several sources at once | ✅ up to 3 panes (display, app windows, cameras), arrangeable live from either side | ⚠️ one desktop across many devices (video wall) | ❌ | ❌ | ❌ | ⚠️ one stream per session |
+| Single-app window mirror | ✅ `aeasy mirror <App>` | ❌ whole desktop only | ✅ pick an app window to share | ⚠️ Linux only | ❌ | ❌ whole display only |
+| Adaptive quality under load | ✅ live, per stream — bitrate/fps step down, secondary panes first | ⚠️ manual quality settings | ⚠️ whatever WebRTC negotiates | ❌ | ❌ | ✅ adaptive bitrate |
+| Auto start on plug-in | ✅ cable watcher: plug in and it streams, reconnects itself | ❌ open the viewer and connect | ❌ | ❌ | ❌ | ❌ |
+| Project status | new | mature, actively maintained | active, but virtual display has been "on the roadmap" for years | active | ⚠️ abandoned (last commit 2018) | very active, large community |
 
 ## Project by project
 
@@ -38,7 +44,12 @@ Compared against the closest open source projects: [scrcpy](https://github.com/G
 - **Weaknesses**: it's game streaming, not a second-display tool — on macOS you must supply the virtual display yourself with a dummy plug or [BetterDisplay](https://github.com/waydabber/BetterDisplay) (freemium) and point Sunshine at it; multiple moving parts; runs over the network.
 
 ### Where AEasy Display fits
-The only one that does **"macOS → Android second display over a USB cable, in one command"** — creates its own virtual display, hardware encode/decode end to end, zero network, the display rotates with the phone, and up to **three sources stream at once** as draggable panes (the extended display plus app windows), each an independent stream. The trade-off: macOS+Android only, no audio, no scroll/multi-finger gestures.
+The only one that does **"macOS → Android second display over a USB cable, in one command"** — creates its own virtual display, hardware encode/decode end to end, zero network, the display rotates with the phone, and up to **three sources stream at once** as draggable panes (the extended display, app windows, or a camera), each an independent stream. Around that core: a settings GUI (`aeasy config` — fps/bitrate/resolution/codec plus a live pane-layout editor), a one-shot low-latency preset (`aeasy tune`), a menu bar tray with status and start/stop, and a phone app that needs only the `INTERNET` permission. Free, MIT, no accounts. The trade-off: macOS+Android only, no audio, no scroll/multi-finger gestures.
+
+### spacedesk — the same idea, but for Windows
+- **Strengths**: mature and polished; audio streaming; touch, pressure stylus, and keyboard/mouse input back; video wall across many devices; viewer runs in any browser; free.
+- **Weaknesses**: **Windows only — there is no macOS version**, so it can't even be compared head-to-head with AEasy on the same machine; closed source; its "USB" mode is network-over-USB via Android USB tethering, not a direct pipe.
+- People compare AEasy to spacedesk a lot, and fair enough — same "phone as a USB second display" idea. But spacedesk answers it for Windows users, AEasy for Mac users. They never compete.
 
 ---
 
@@ -53,7 +64,7 @@ The only one that does **"macOS → Android second display over a USB cable, in 
 
 ## At a glance
 
-| | AEasy Display | scrcpy |
+| | ⭐ AEasy Display | scrcpy |
 |---|---|---|
 | Video direction | Mac → Android (second display) | Android → PC (phone mirroring) |
 | Core job | more screen space for the Mac | view/control the phone from a computer |

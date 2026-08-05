@@ -6,7 +6,8 @@
 - Real macOS extended display — drag windows to it, not just mirroring
 - Touchscreen: tap to click, drag windows with a finger
 - Auto-rotation — portrait/landscape follows the device
-- Up to 3 sources at once as arrangeable, resizable panes
+- Up to 3 devices at once, each its own extended display (`aeasy device add`)
+- Up to 3 sources per device as arrangeable, resizable panes
 - Single-app window mirroring (`aeasy mirror <App>`)
 - Hardware-encoded H.264 / HEVC, Retina-crisp
 - Adaptive quality — bitrate/fps step down live when the decoder lags

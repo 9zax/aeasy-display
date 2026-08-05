@@ -37,8 +37,9 @@ apk: ## build the Android viewer app (needs Android SDK)
 mac/check: mac/Protocol.swift mac/check.swift
 	cd mac && $(SWIFTC) -o check Protocol.swift check.swift
 
-check: mac/check ## run the protocol assertions (pure, no permissions — this is the CI gate)
+check: mac/check ## run the protocol + CLI assertions (pure, no permissions — this is the CI gate)
 	./mac/check
+	@zsh test/cli.sh
 
 smoke: mac/aeasy-server ## run the end-to-end smoke test (needs Screen Recording granted)
 	python3 test/smoke.py

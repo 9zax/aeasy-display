@@ -16,6 +16,7 @@ import AVFoundation
 import ScreenCaptureKit
 import VideoToolbox
 import CoreMedia
+import CoreImage
 import CoreVideo
 import Network
 import ApplicationServices
@@ -67,11 +68,34 @@ func writeConf(_ updates: [String: String]) {
     try? txt.write(toFile: shareDir + "/config", atomically: true, encoding: .utf8)
 }
 
+// titled with this server's device label: with three servers running, two identically
+// worded notifications give the user no way to tell which device is complaining
 func notify(_ msg: String) {
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-    p.arguments = ["-e", "display notification \"\(msg)\" with title \"AEasy Display\" sound name \"Funk\""]
+    p.arguments = ["-e", "display notification \"\(msg)\" with title \"\(DEVICE_LABEL)\" sound name \"Funk\""]
     try? p.run()
+}
+
+// MARK: - input arbitration
+// There is one system cursor, and every server posts into it. Exactly one device may
+// drive it. Re-read on the touch path rather than pushed over the control channel: the
+// tray, the settings window and the CLI all just edit a config file, so one mtime check
+// covers all three with no new protocol. Touched only from touchQueue, which is serial.
+private var _inputAllowed = true
+private var _inputCheckedAt: TimeInterval = 0
+private var _inputMTime: TimeInterval = -1
+func inputAllowed() -> Bool {
+    let now = Date().timeIntervalSince1970
+    if now - _inputCheckedAt < 1 { return _inputAllowed }
+    _inputCheckedAt = now
+    let m = ((try? FileManager.default.attributesOfItem(atPath: shareDir + "/config")[.modificationDate])
+        as? Date)?.timeIntervalSince1970 ?? 0
+    if m == _inputMTime { return _inputAllowed }
+    _inputMTime = m
+    // absent means yes: a single-device install and the smoke harness never write the key
+    _inputAllowed = (loadConf()["INPUT"] ?? "1") == "1"
+    return _inputAllowed
 }
 
 // SOURCES=display,window:Code — falls back to the legacy MODE/WINDOW_APP pair so an
@@ -113,6 +137,26 @@ if CommandLine.arguments.count >= 3,
 // appended AFTER W H — `aeasy-server --ios 372 664` would silently fall back to the
 // 1650x720 defaults above, which looks like a sizing bug rather than an argv bug
 let IOS_MODE = CommandLine.arguments.contains("--ios")
+
+// --slot <n> is how bin/aeasy addresses one of up to three concurrent servers: it is the
+// pkill/pgrep handle, and it names the virtual display, which is otherwise identical
+// across instances and unpickable in System Settings > Displays.
+let SLOT: Int = {
+    let a = CommandLine.arguments
+    guard let i = a.firstIndex(of: "--slot"), i + 1 < a.count, let n = Int(a[i + 1]) else { return 0 }
+    return n
+}()
+let DEVICE_LABEL = SLOT == 0 ? "AEasy Display" : "AEasy Display \(SLOT + 1)"
+
+// PANEL=<W> <H> pins this device's display size. Without it the size still comes from
+// argv — `wm size` on Android, the type-3 report on iOS — so every existing install is
+// unaffected. Locked also means type-3 must not restart the process (see handleResize).
+let PANEL_LOCK: (UInt32, UInt32)? = {
+    let p = (_conf["PANEL"] ?? "").split(separator: " ").compactMap { UInt32($0) }
+    guard p.count == 2, p[0] > 0, p[1] > 0 else { return nil }
+    return (p[0], p[1])
+}()
+if let lock = PANEL_LOCK { pxW = lock.0; pxH = lock.1 }
 
 func fitEven(_ w: Double, _ h: Double, into maxW: Double, _ maxH: Double) -> (Int, Int) {
     let s = min(maxW / w, maxH / h)
@@ -548,6 +592,10 @@ func raiseWindow(pid: pid_t, wid: CGWindowID, frame: CGRect) {
 /// Runs off the net queue: Accessibility calls block on the target app's run loop, and
 /// one unresponsive app would otherwise freeze every video stream behind it.
 func handleTouch(_ d: Data, _ src: Source) {
+    // the one place in the repo that synthesises .cghidEventTap events, so gating here
+    // covers window raising too. NOT in drainTouch: dropping a 5-byte unit there desyncs
+    // every later packet, and a misaligned type-3 reads as a plausible touch.
+    guard inputAllowed() else { return }
     let type = Int(d[d.startIndex])
     guard type < 3 else { return }   // defensive: drainTouch routes type 3 to handleResize and drops 4+
     let nx = Double(UInt16(d[d.startIndex + 1]) << 8 | UInt16(d[d.startIndex + 2])) / 65535.0
@@ -573,6 +621,89 @@ func handleTouch(_ d: Data, _ src: Source) {
     CGEvent(mouseEventSource: nil, mouseType: mouseType[type],
             mouseCursorPosition: pt, mouseButton: .left)?.post(tap: .cghidEventTap)
 }
+
+// MARK: - composite stream (legacy/iOS viewers)
+
+// The iOS app is a single-connection legacy viewer: it never handshakes, so it can only
+// receive one stream. With more than one source active, legacy viewers get this instead
+// of the bare primary: every pane drawn into one frame per the shared layout, so the
+// iPad shows the same arrangement as the settings canvas — no client change needed.
+let COMPOSITE = 1_000   // ConnState.video index for composite subscribers; never a sources[] index
+
+final class Compositor {
+    private let queue = DispatchQueue(label: "composite")
+    private let encoder = Encoder(bitrate: BITRATE, fps: FPS)
+    private let ctx = CIContext(options: [.cacheIntermediates: false])
+    private var pool: CVPixelBufferPool?
+    private var timer: DispatchSourceTimer?
+    private var forceKey = false
+    private var lastForcedKey = Date.distantPast   // same ≥1 Hz cap as Source.forceKeyframe
+    private let W: Int, H: Int
+
+    init(width: Int, height: Int) {
+        W = width; H = height
+        encoder.onHeader = { h in server?.setHeader(h, COMPOSITE) }
+        encoder.onEncoded = { data, isKey in server?.broadcast(data, from: COMPOSITE, droppable: !isKey) }
+        // timer-driven, not capture-driven: ScreenCaptureKit sources go silent when idle,
+        // but lastPB always holds their newest frame — a fixed tick composites the union
+        let t = DispatchSource.makeTimerSource(queue: queue)
+        t.schedule(deadline: .now() + 1, repeating: 1.0 / Double(FPS))
+        t.setEventHandler { [weak self] in self?.tick() }
+        t.resume()
+        timer = t
+    }
+
+    func forceKeyframe() {
+        queue.async { [weak self] in
+            guard let self, Date().timeIntervalSince(self.lastForcedKey) >= 1 else { return }
+            self.lastForcedKey = Date()
+            self.forceKey = true
+        }
+    }
+
+    private func tick() {
+        guard let s = server else { return }
+        // one hop to the net queue for its confined state; sources' lastPB on their queues.
+        // Safe order: net and sample queues only ever dispatch *async* toward this queue.
+        let (hasViewer, panes) = s.queue.sync { (s.hasCompositeViewer, layout.panes) }
+        guard hasViewer else { return }
+        var out = CIImage(color: .black).cropped(to: CGRect(x: 0, y: 0, width: W, height: H))
+        for p in panes.sorted(by: { $0.z < $1.z }) {
+            guard let src = sources.first(where: { $0.id == p.src && $0.alive }),
+                  let pb = src.sampleQueue.sync(execute: { src.lastPB }) else { continue }
+            let img = CIImage(cvPixelBuffer: pb)
+            // ponytail: stretch to the pane box, matching the phone's pane view
+            let sx = p.w * Double(W) / img.extent.width
+            let sy = p.h * Double(H) / img.extent.height
+            let ty = Double(H) - (p.y + p.h) * Double(H)   // layout is top-left origin, CI bottom-left
+            out = img.transformed(by: CGAffineTransform(translationX: p.x * Double(W), y: ty)
+                                        .scaledBy(x: sx, y: sy))
+                     .composited(over: out)
+        }
+        guard let buf = makeBuffer() else { return }
+        ctx.render(out, to: buf, bounds: CGRect(x: 0, y: 0, width: W, height: H),
+                   colorSpace: CGColorSpaceCreateDeviceRGB())
+        encoder.encode(buf, force: forceKey)
+        forceKey = false
+    }
+
+    private func makeBuffer() -> CVPixelBuffer? {
+        if pool == nil {
+            let attrs: [CFString: Any] = [
+                kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA,
+                kCVPixelBufferWidthKey: W, kCVPixelBufferHeightKey: H,
+                kCVPixelBufferIOSurfacePropertiesKey: [:] as [CFString: Any],
+            ]
+            CVPixelBufferPoolCreate(nil, nil, attrs as CFDictionary, &pool)
+        }
+        guard let pool else { return nil }
+        var pb: CVPixelBuffer?
+        CVPixelBufferPoolCreatePixelBuffer(nil, pool, &pb)
+        return pb
+    }
+}
+
+var compositor: Compositor?
 
 // MARK: - server
 
@@ -664,7 +795,7 @@ final class TCPServer {
         queue.asyncAfter(deadline: .now() + .milliseconds(300)) { [weak self, weak conn] in
             guard let self, let conn, case .handshaking = conn.state else { return }
             if conn.buf.isEmpty {
-                self.subscribe(conn, 0)   // legacy viewer: never speaks first, gets the primary source
+                self.subscribe(conn, self.legacyTarget())   // legacy viewer: never speaks first
             } else {
                 self.reject(conn, "handshake timeout")
             }
@@ -677,9 +808,10 @@ final class TCPServer {
             // 'A' is the only byte a handshake can start with, so anything else is a
             // legacy client whose first bytes are already a touch packet
             if conn.buf.isEmpty, let first = d.first, first != 0x41 {
-                subscribe(conn, 0)
+                let target = legacyTarget()
+                subscribe(conn, target)
                 conn.buf = d
-                drainTouch(conn, 0)
+                drainTouch(conn, target)
                 return
             }
             conn.buf.append(d)
@@ -720,7 +852,26 @@ final class TCPServer {
         drainTouch(conn, i)
     }
 
+    // legacy viewers can't pick a source; when panes exist they get the composite
+    private func legacyTarget() -> Int { compositor != nil ? COMPOSITE : 0 }
+
+    // a composite subscriber counts viewers for the render loop — computed here because
+    // conns is net-queue-confined; the compositor reads it via queue.sync
+    var hasCompositeViewer: Bool {
+        conns.values.contains { if case .video(let i) = $0.state { return i == COMPOSITE }; return false }
+    }
+
     private func subscribe(_ conn: Conn, _ index: Int) {
+        if index == COMPOSITE {
+            guard let compositor else { reject(conn, "unknown source"); return }
+            conn.state = .video(COMPOSITE)
+            NSLog("client subscribed to composite (\(sources.filter(\.alive).count) panes)")
+            if let h = headers[COMPOSITE], !h.isEmpty {
+                conn.c.send(content: h, completion: .contentProcessed { _ in })
+            }
+            compositor.forceKeyframe()
+            return
+        }
         guard index < sources.count, sources[index].alive else { reject(conn, "unknown source"); return }
         conn.state = .video(index)
         NSLog("client subscribed to \(sources[index].id)")
@@ -746,7 +897,9 @@ final class TCPServer {
     // Never consume a partial unit: discarding one desyncs every later packet by its
     // width, and a misaligned type-3 reads as a plausible touch (wandering cursor).
     private func drainTouch(_ conn: Conn, _ index: Int) {
-        guard index < sources.count, case .video = conn.state else { return }
+        guard case .video = conn.state else { return }
+        if index == COMPOSITE { drainCompositeTouch(conn); return }
+        guard index < sources.count else { return }
         let src = sources[index]
         var off = conn.buf.startIndex
         let end = conn.buf.endIndex
@@ -766,11 +919,43 @@ final class TCPServer {
         conn.buf = off == end ? Data() : Data(conn.buf[off ..< end])
     }
 
+    // A composite viewer's touches arrive in whole-frame coordinates: hit-test the pane
+    // under the point (topmost z first), replay the packet in that pane's own space, and
+    // route it to that pane's source. A touch on the black background is dropped.
+    private func drainCompositeTouch(_ conn: Conn) {
+        var off = conn.buf.startIndex
+        let end = conn.buf.endIndex
+        while end - off >= 5 {
+            let pkt = Data(conn.buf[off ..< off + 5])
+            off += 5
+            switch Protocol.parse(pkt) {
+            case .touch(let type, let x, let y):
+                let nx = Double(x) / 65535.0, ny = Double(y) / 65535.0
+                guard let p = layout.panes.sorted(by: { $0.z > $1.z })
+                        .first(where: { nx >= $0.x && nx <= $0.x + $0.w && ny >= $0.y && ny <= $0.y + $0.h }),
+                      let src = sources.first(where: { $0.id == p.src && $0.alive }) else { break }
+                let lx = UInt16((nx - p.x) / p.w * 65535), ly = UInt16((ny - p.y) / p.h * 65535)
+                let local = Data([UInt8(type), UInt8(lx >> 8), UInt8(lx & 0xff), UInt8(ly >> 8), UInt8(ly & 0xff)])
+                touchQueue.async { handleTouch(local, src) }
+            case .resize(let w, let h):
+                // rotation still resizes: route to the primary, which handleResize vets anyway
+                if let primary = sources.first { handleResize(primary, w, h) }
+            case .invalid:
+                break
+            }
+        }
+        conn.buf = off == end ? Data() : Data(conn.buf[off ..< end])
+    }
+
     // type-3: the device's viewport declaration, honoured only from a subscriber of the
     // primary display source. A window: pane's dimensions are the Mac window's, not the
     // phone's — and a secondary pane must never be able to restart the whole server.
     private func handleResize(_ src: Source, _ w: Int, _ h: Int) {
         sawTypeThree = true
+        // the latch is set FIRST and unconditionally: the --ios timer reads it to decide
+        // whether to nag "open the app", so a locked device that is streaming happily
+        // would otherwise be nagged forever
+        if PANEL_LOCK != nil { return }
         guard src.isPrimary, src.isDisplay, src.displayID != 0, src.alive else {
             NSLog("type-3 \(w)x\(h) from non-viewport subscriber (\(src.id)) — ignored")
             return
@@ -969,7 +1154,7 @@ var vdispRef: AnyObject?
 func makeVirtualDisplay() -> CGDirectDisplayID? {
     let desc = CGVirtualDisplayDescriptor()
     desc.queue = DispatchQueue.main
-    desc.name = "AEasy Display"
+    desc.name = DEVICE_LABEL
     desc.maxPixelsWide = pxW * 2
     desc.maxPixelsHigh = pxH * 2
     desc.sizeInMillimeters = CGSize(width: 152, height: 152.0 * Double(pxH) / Double(pxW))
@@ -1092,10 +1277,15 @@ Task {
 
         if !AXIsProcessTrusted() {
             NSLog("touch input needs Accessibility: System Settings > Privacy & Security > Accessibility > add aeasy-server (re-grant after every rebuild)")
-            AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary)
-            // an iOS client is a legacy video client and never opens the control channel,
-            // so the no_accessibility error message can't reach it — notify on the Mac instead
-            if IOS_MODE { notify("Taps from the iPhone do nothing until Accessibility is granted to aeasy-server") }
+            // The grant is per-binary, so one covers all three servers — but the prompt is
+            // per-process, and three of them start together after a rebuild. Only the slot
+            // that will actually post events asks.
+            if inputAllowed() {
+                AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary)
+                // an iOS client is a legacy video client and never opens the control channel,
+                // so the no_accessibility error message can't reach it — notify on the Mac instead
+                if IOS_MODE { notify("Taps from the iPhone do nothing until Accessibility is granted to aeasy-server") }
+            }
         }
         if IOS_MODE, !SOURCE_IDS.contains("display") {
             NSLog("iOS client with no display source — rotation will not resize (check `aeasy sources`)")
@@ -1189,6 +1379,14 @@ Task {
         let s = try TCPServer()
         server = s
         s.startHealthCheck()
+
+        if sources.count > 1 {
+            // canvas = the primary's encode size, so a composite viewer costs no extra pixels
+            let w = sources[0].encW > 0 ? sources[0].encW : Int(pxW)
+            let h = sources[0].encH > 0 ? sources[0].encH : Int(pxH)
+            compositor = Compositor(width: w, height: h)
+            NSLog("composite stream \(w)x\(h) for legacy viewers (\(sources.count) panes)")
+        }
 
         // The app cannot be launched remotely (no `am start` on iOS), so tell the user.
         // Trigger on "no type-3 packet", never "no TCP connection": iproxy accept()s the

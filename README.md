@@ -177,6 +177,12 @@ If the app has several windows, the largest on-screen one is used. If no matchin
 
 `aeasy config` opens a small GUI, or edit `~/.local/share/aeasy/config` by hand:
 
+<p align="center">
+  <img src="docs/setting.png" width="420" alt="AEasy Display settings window — frame rate, bitrate, resolution, codec, sources, and a live pane-layout editor">
+</p>
+
+The window covers everything in the table below — frame rate, bitrate, resolution, and codec sliders/menus up top, then **up to 3 source pickers** (extended display, an app window, or a camera). The blue canvas is a live **pane-layout editor**: drag a pane to move it, drag its bottom-right corner to resize, and the phone follows in real time. **Save & Restart** applies quality and source changes by restarting the stream.
+
 | Key | Default | Meaning |
 |---|---|---|
 | `FPS` | `20` | Capture/encode frame rate (10–30). Lower = less latency on slow phones. |
@@ -218,7 +224,8 @@ aeasy-display/
 
 - No audio, and touch is tap + drag only — no scrolling, multi-finger gestures, or stylus pressure (PRs welcome).
 - Uses the private `CGVirtualDisplay` API — the same one other virtual-display tools rely on; it may change in future macOS releases.
-- One phone at a time (the stream itself supports multiple viewers).
+- Up to 3 devices at once, each its own display (`aeasy device add`). Only one of them controls the Mac cursor at a time — pick it with `aeasy device input`.
+- Devices are only discovered through `adb` and `idevice_id`, so a phone needs USB debugging (Android) or a trust pairing (iOS) before it can be added. There is no network scan.
 
 ## License
 

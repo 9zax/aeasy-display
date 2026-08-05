@@ -3,21 +3,27 @@
 <p align="center"><a href="COMPARISON.md">English</a> · <b>ภาษาไทย</b></p>
 
 เทียบกับโปรเจกต์ open source ที่ใกล้เคียงกัน: [scrcpy](https://github.com/Genymobile/scrcpy), [Deskreen](https://github.com/pavlobu/deskreen), [Weylus](https://github.com/H-M-H/Weylus), [VirtScreen](https://github.com/kbumsik/VirtScreen), [Sunshine](https://github.com/LizardByte/Sunshine)+[Moonlight](https://moonlight-stream.org/)
-(ตัวดัง ๆ อย่าง Duet Display, spacedesk, superDisplay ไม่รวมเพราะเป็น closed source)
+(ตัวดัง ๆ อย่าง Duet Display, superDisplay ไม่รวมเพราะเป็น closed source — ส่วน spacedesk ก็ closed source เหมือนกัน แต่มีคนถามบ่อยมากเลยใส่ในตารางให้เลย)
 
 ## ตารางรวม — โจทย์ "เอาอุปกรณ์อื่นมาเป็นจอเสริม"
 
-| | AEasy Display | Deskreen | Weylus | VirtScreen | Sunshine + Moonlight |
-|---|---|---|---|---|---|
-| ฝั่งคอม | macOS เท่านั้น | Win / macOS / Linux | Win / macOS / Linux | Linux (X11) เท่านั้น | Win / macOS / Linux |
-| ฝั่งจอเสริม | Android / iOS เบต้า (แอป viewer) | ทุกอย่างที่มี browser | ทุกอย่างที่มี browser | ทุกอย่างที่รับ VNC ได้ | Android / iOS / อื่น ๆ (แอป Moonlight) |
-| สร้าง virtual display ให้เอง | ✅ (`CGVirtualDisplay`) | ❌ ต้องมี dummy plug หรือทำ virtual display เอง | ⚠️ Linux เท่านั้น (macOS = มิเรอร์อย่างเดียว) | ✅ (xrandr) | ❌ ต้องมี dummy plug หรือ BetterDisplay ช่วย |
-| การเชื่อมต่อ | USB (zero network) หรือ Wi-Fi (`aeasy wifi`) | Wi-Fi (WebRTC) | Wi-Fi (WebRTC/WebSocket) | Wi-Fi (VNC) | Wi-Fi / LAN (มี hw encode) |
-| ความหน่วง | ต่ำ (hw encode/decode ทั้งสาย) | ปานกลาง–สูง (software encode ผ่าน browser) | ปานกลาง (มี hw encode บางแพลตฟอร์ม) | สูง (VNC ไม่เหมาะกับวิดีโอ) | ต่ำมาก (ออกแบบมาเพื่อเกม) |
-| ส่ง input กลับ (touch/ปากกา) | ✅ แตะ+ลาก (ไม่มีแรงกดปากกา/scroll) | ❌ | ✅ จุดขายหลัก (stylus แรงกด — Linux เท่านั้น) | ✅ ผ่าน VNC | ✅ (เมาส์/คีย์/จอย) |
-| หมุนจออัตโนมัติ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| หลายแหล่งภาพพร้อมกัน | ✅ สูงสุด 3 pane (จอเสริม + หน้าต่างแอป) ลากจัดวางสดได้จากทั้งสองฝั่ง | ❌ | ❌ | ❌ | ⚠️ สตรีมเดียวต่อ session |
-| สถานะโปรเจกต์ | ใหม่ | active แต่ virtual display "อยู่ใน roadmap" มานาน | active | ⚠️ หยุดพัฒนา (commit สุดท้าย 2018) | active มาก ชุมชนใหญ่ |
+| | ⭐ AEasy Display | spacedesk | Deskreen | Weylus | VirtScreen | Sunshine + Moonlight |
+|---|---|---|---|---|---|---|
+| ฝั่งคอม | macOS เท่านั้น | Windows 10/11 เท่านั้น | Win / macOS / Linux | Win / macOS / Linux | Linux (X11) เท่านั้น | Win / macOS / Linux |
+| ฝั่งจอเสริม | Android / iOS เบต้า (แอป viewer) | Android / iOS / browser / Windows อีกเครื่อง | ทุกอย่างที่มี browser | ทุกอย่างที่มี browser | ทุกอย่างที่รับ VNC ได้ | Android / iOS / อื่น ๆ (แอป Moonlight) |
+| Open source | ✅ MIT | ❌ closed source, ใช้ฟรี | ✅ | ✅ | ✅ | ✅ |
+| สร้าง virtual display ให้เอง | ✅ (`CGVirtualDisplay`) | ✅ (Windows display driver) | ❌ ต้องมี dummy plug หรือทำ virtual display เอง | ⚠️ Linux เท่านั้น (macOS = มิเรอร์อย่างเดียว) | ✅ (xrandr) | ❌ ต้องมี dummy plug หรือ BetterDisplay ช่วย |
+| การเชื่อมต่อ | USB (zero network) หรือ Wi-Fi (`aeasy wifi`) | Wi-Fi / LAN / USB (ผ่าน USB tethering ของ Android) | Wi-Fi (WebRTC) | Wi-Fi (WebRTC/WebSocket) | Wi-Fi (VNC) | Wi-Fi / LAN (มี hw encode) |
+| ความหน่วง | ต่ำ (hw encode/decode ทั้งสาย) | ปานกลาง (ขึ้นกับเครือข่าย; USB/LAN จะต่ำ) | ปานกลาง–สูง (software encode ผ่าน browser) | ปานกลาง (มี hw encode บางแพลตฟอร์ม) | สูง (VNC ไม่เหมาะกับวิดีโอ) | ต่ำมาก (ออกแบบมาเพื่อเกม) |
+| ส่ง input กลับ (touch/ปากกา) | ✅ แตะ+ลาก (ไม่มีแรงกดปากกา/scroll) | ✅ touch, stylus แรงกด, คีย์บอร์ด/เมาส์ | ❌ | ✅ จุดขายหลัก (stylus แรงกด — Linux เท่านั้น) | ✅ ผ่าน VNC | ✅ (เมาส์/คีย์/จอย) |
+| เสียง | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ |
+| หมุนจออัตโนมัติ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| ต่อหลายเครื่องพร้อมกัน | ✅ สูงสุด 3 เครื่อง แต่ละเครื่องเป็นจอของตัวเอง เพิ่ม/ถอดได้เลย | ⚠️ เดสก์ท็อปเดียวกระจายหลายอุปกรณ์ (video wall) | ❌ | ❌ | ❌ | ❌ |
+| หลายแหล่งภาพพร้อมกัน | ✅ สูงสุด 3 pane (จอเสริม, หน้าต่างแอป, กล้อง) ลากจัดวางสดได้จากทั้งสองฝั่ง | ⚠️ เดสก์ท็อปเดียวกระจายหลายอุปกรณ์ (video wall) | ❌ | ❌ | ❌ | ⚠️ สตรีมเดียวต่อ session |
+| Mirror รายแอป | ✅ `aeasy mirror <App>` | ❌ ได้ทั้งเดสก์ท็อปเท่านั้น | ✅ เลือกแชร์เฉพาะหน้าต่างแอปได้ | ⚠️ Linux เท่านั้น | ❌ | ❌ ได้ทั้งจอเท่านั้น |
+| ปรับคุณภาพตามโหลดอัตโนมัติ | ✅ สด รายสตรีม — ลด bitrate/fps เอง pane รองโดนก่อน | ⚠️ ตั้งคุณภาพเองด้วยมือ | ⚠️ ตามที่ WebRTC จัดการให้ | ❌ | ❌ | ✅ adaptive bitrate |
+| เสียบสายแล้วเริ่มเอง | ✅ cable watcher: เสียบปุ๊บสตรีมปั๊บ ต่อใหม่ให้เอง | ❌ ต้องเปิด viewer แล้วกด connect | ❌ | ❌ | ❌ | ❌ |
+| สถานะโปรเจกต์ | ใหม่ | โตเต็มวัย พัฒนาต่อเนื่อง | active แต่ virtual display "อยู่ใน roadmap" มานาน | active | ⚠️ หยุดพัฒนา (commit สุดท้าย 2018) | active มาก ชุมชนใหญ่ |
 
 ## สรุปรายเจ้า
 
@@ -38,7 +44,12 @@
 - **ด้อย**: เป็น game-streaming ไม่ใช่เครื่องมือจอเสริม — บน macOS ต้องหา virtual display เองด้วย dummy plug หรือ [BetterDisplay](https://github.com/waydabber/BetterDisplay) (freemium) แล้วชี้ Sunshine ให้สตรีมจอนั้น, setup หลายชิ้น, ผ่านเครือข่าย
 
 ### จุดยืนของ AEasy Display ในกลุ่มนี้
-เป็นตัวเดียวที่ **"จอเสริม macOS → Android ผ่านสาย USB จบในคำสั่งเดียว"** — สร้าง virtual display เอง, hw encode/decode ตลอดสาย, ไม่ใช้เครือข่าย, หมุนจอตามเครื่อง และสตรีมได้สูงสุด **3 แหล่งภาพพร้อมกัน**เป็น pane ลากจัดวางได้ (จอเสริม + หน้าต่างแอป) แยกสตรีมอิสระต่อ pane แลกกับการที่รองรับแค่ macOS+Android, ไม่มีเสียง และยังไม่รองรับ scroll/หลายนิ้ว
+เป็นตัวเดียวที่ **"จอเสริม macOS → Android ผ่านสาย USB จบในคำสั่งเดียว"** — สร้าง virtual display เอง, hw encode/decode ตลอดสาย, ไม่ใช้เครือข่าย, หมุนจอตามเครื่อง และสตรีมได้สูงสุด **3 แหล่งภาพพร้อมกัน**เป็น pane ลากจัดวางได้ (จอเสริม, หน้าต่างแอป หรือกล้อง) แยกสตรีมอิสระต่อ pane รอบ ๆ แกนนี้ยังมี GUI ตั้งค่า (`aeasy config` — fps/bitrate/ความละเอียด/codec พร้อม editor จัดวาง pane สด ๆ), preset หน่วงต่ำกดทีเดียว (`aeasy tune`), ไอคอน tray บนเมนูบาร์ (สถานะ + start/stop) และแอปมือถือที่ขอ permission แค่ `INTERNET` ฟรี, MIT, ไม่มีบัญชีผู้ใช้ แลกกับการที่รองรับแค่ macOS+Android, ไม่มีเสียง และยังไม่รองรับ scroll/หลายนิ้ว
+
+### spacedesk — ไอเดียเดียวกัน แต่เป็นของฝั่ง Windows
+- **เด่น**: โตเต็มวัย ขัดเกลามานาน, มีเสียง, ส่ง input กลับได้ทั้ง touch / stylus แรงกด / คีย์บอร์ด-เมาส์, ทำ video wall หลายอุปกรณ์ได้, ฝั่งรับใช้ browser ก็ได้, ใช้ฟรี
+- **ด้อย**: **Windows เท่านั้น — ไม่มีเวอร์ชัน macOS** เลยเทียบบนเครื่องเดียวกับ AEasy ไม่ได้ด้วยซ้ำ, closed source, โหมด "USB" จริง ๆ คือ network-over-USB ผ่าน USB tethering ของ Android ไม่ใช่ท่อส่งตรง
+- มีคนเทียบ AEasy กับ spacedesk บ่อย ก็สมเหตุผล — โจทย์ "มือถือเป็นจอเสริมผ่าน USB" เดียวกันเป๊ะ แต่ spacedesk ตอบโจทย์ให้คนใช้ Windows ส่วน AEasy ตอบให้คนใช้ Mac — ไม่ได้แข่งกันเลย
 
 ---
 
@@ -53,7 +64,7 @@
 
 ## เปรียบเทียบภาพรวม
 
-| | AEasy Display | scrcpy |
+| | ⭐ AEasy Display | scrcpy |
 |---|---|---|
 | ทิศทางภาพ | Mac → Android (จอเสริม) | Android → PC (มิเรอร์มือถือ) |
 | โจทย์หลัก | เพิ่มพื้นที่หน้าจอให้ Mac | ดู/ควบคุมมือถือจากคอม |
