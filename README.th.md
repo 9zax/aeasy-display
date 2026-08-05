@@ -58,7 +58,7 @@ flowchart LR
 
 **เรื่อง iPad:** [Sidecar](https://support.apple.com/th-th/102597) ของ Apple เองดีกว่าถ้าคุณ sign in Apple ID อยู่แล้ว — ฟรี, native, รองรับ Apple Pencil ที่ AEasy รองรับ iPad ไว้สำหรับคนที่ไม่อยาก sign in ส่วน iPhone ไม่มีทางเลือก first-party เลย นั่นคือเหตุผลที่ฟีเจอร์นี้มีอยู่
 
-สถานะ: **เบต้า** — กำลังพัฒนาต่อเนื่อง ตามได้ที่ [`specs/2026-08-05-ios-client.md`](specs/2026-08-05-ios-client.md)
+คู่มือเต็มพร้อมวิธีแก้ปัญหา: **[SETUP.th.md](SETUP.th.md)** · สถานะ: **เบต้า** — กำลังพัฒนาต่อเนื่อง ตามได้ที่ [`specs/2026-08-05-ios-client.md`](specs/2026-08-05-ios-client.md)
 
 ## สิ่งที่ต้องมี
 
@@ -66,6 +66,8 @@ flowchart LR
 - Homebrew (สำหรับติดตั้ง `adb` จาก `android-platform-tools`)
 - มือถือหรือ tablet Android 8+ ที่เปิด **USB debugging** แล้ว
 - สาย USB-C หนึ่งเส้น
+
+> **ใช้ครั้งแรก?** คู่มือทีละขั้น — สิทธิ์ต่าง ๆ, USB debugging ฝั่ง Android, ขั้นตอน sign ฝั่ง iOS ทั้งหมด — อยู่ใน **[SETUP.th.md](SETUP.th.md)**
 
 ## ติดตั้ง
 

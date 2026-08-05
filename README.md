@@ -58,7 +58,7 @@ The iOS viewer lives in [`ios/`](ios/) and streams the same way — but Apple's 
 
 **iPad note:** Apple's own [Sidecar](https://support.apple.com/en-us/102597) is the better tool if you're signed into an Apple ID — free, native, Apple Pencil. AEasy's iPad support is for people who won't sign in. iPhone has no first-party equivalent, which is why this exists.
 
-Status: **beta** — in active development, tracked in [`specs/2026-08-05-ios-client.md`](specs/2026-08-05-ios-client.md).
+Full walkthrough with troubleshooting: **[SETUP.md](SETUP.md)**. Status: **beta** — in active development, tracked in [`specs/2026-08-05-ios-client.md`](specs/2026-08-05-ios-client.md).
 
 ## Requirements
 
@@ -66,6 +66,8 @@ Status: **beta** — in active development, tracked in [`specs/2026-08-05-ios-cl
 - Homebrew (for `adb` via `android-platform-tools`)
 - An Android 8+ phone or tablet with **USB debugging** enabled
 - A USB-C cable
+
+> **First time?** The step-by-step guide — permissions, Android USB debugging, the whole iOS signing dance — is in **[SETUP.md](SETUP.md)**.
 
 ## Install
 
