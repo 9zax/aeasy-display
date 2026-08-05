@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AEasy Display</string>
+
+    <string name="arrange_toggle">จัดวาง</string>
+    <string name="arrange_toggle_done">เสร็จ</string>
+    <string name="arrange_toggle_desc">สลับโหมดจัดวาง</string>
+    <string name="arrange_on">เปิดโหมดจัดวาง — ลากเพื่อย้าย ลากมุมเพื่อปรับขนาด</string>
+    <string name="arrange_off">ปิดโหมดจัดวาง — แตะเพื่อควบคุม Mac</string>
+
+    <string name="pane_window_closed">ปิดหน้าต่าง \"%1$s\" แล้ว</string>
+    <string name="pane_decoder_unavailable">ตัวถอดรหัสวิดีโอไม่พอ</string>
+    <string name="pane_decoder_detail">เครื่องนี้ถอดรหัสหลายภาพพร้อมกันไม่ไหว</string>
+    <string name="pane_retry">ลองใหม่</string>
+    <string name="pane_connecting">กำลังเชื่อมต่อ…</string>
+    <string name="pane_connection_lost">การเชื่อมต่อหลุด กำลังเชื่อมต่อใหม่…</string>
+    <string name="pane_source_unavailable">ไม่พบแหล่งภาพนี้</string>
+
+    <string name="err_no_accessibility">แตะแล้วไม่มีผล จนกว่าจะอนุญาต Accessibility บน Mac</string>
+    <string name="err_too_many_sources">ใช้ได้สูงสุด 3 แหล่งภาพ</string>
+    <string name="err_mac">ข้อผิดพลาดจาก Mac: %1$s</string>
+
+    <string name="pane_desc">แหล่งภาพ %1$s</string>
+    <string name="reset_layout">รีเซ็ตการจัดวาง</string>
+</resources>

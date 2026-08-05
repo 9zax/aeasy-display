@@ -33,6 +33,13 @@ phone_dims() {  # echoes "W H" matching current phone rotation
   if [[ "$rot" == 0 || "$rot" == 2 ]]; then echo "$small $big"; else echo "$big $small"; fi
 }
 
+# SOURCES replaces the old exclusive MODE/WINDOW_APP pair; strip those so a stale
+# value can never come back if SOURCES is later cleared
+set_sources() {
+  mkdir -p "$SHARE"
+  { grep -vE '^(SOURCES|MODE|WINDOW_APP)=' "$CFG" 2>/dev/null; echo "SOURCES=$1"; } > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
+}
+
 server_start() {
   pkill -f aeasy-server 2>/dev/null
   local dims=($(phone_dims))
@@ -95,16 +102,31 @@ case "${1:-start}" in
   mirror)
     if [[ -z "$2" ]]; then echo "usage: aeasy mirror <AppName>   e.g. aeasy mirror Safari"; exit 1; fi
     if ! plugged; then warn_unplugged; exit 1; fi
-    mkdir -p "$SHARE"
-    { grep -vE '^(MODE|WINDOW_APP)=' "$CFG" 2>/dev/null; echo "MODE=window"; echo "WINDOW_APP=$2"; } > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
+    set_sources "window:$2"
     server_start; sleep 1; app_open
     echo "🪞 Mirroring '$2' to the phone (back to extended: aeasy screen)"
+    echo "   showing several at once: aeasy sources display,window:$2"
     ;;
   screen)
-    mkdir -p "$SHARE"
-    { grep -vE '^(MODE|WINDOW_APP)=' "$CFG" 2>/dev/null; echo "MODE=display"; } > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
+    set_sources "display"
     if plugged; then server_start; sleep 1; app_open; fi
     echo "🖥  Extended-display mode"
+    ;;
+  sources)
+    if [[ -z "$2" ]]; then
+      cur=$(grep -m1 '^SOURCES=' "$CFG" 2>/dev/null | cut -d= -f2-)
+      if [[ -n "$cur" ]]; then echo "$cur"
+      elif [[ "$(grep -m1 '^MODE=' "$CFG" 2>/dev/null | cut -d= -f2)" == "window" ]]; then
+        echo "window:$(grep -m1 '^WINDOW_APP=' "$CFG" 2>/dev/null | cut -d= -f2)"
+      else echo "display"; fi
+      exit 0
+    fi
+    n=$(echo "$2" | tr ',' '\n' | grep -c .)
+    if (( n > 3 )); then echo "⚠️  Maximum 3 sources — got $n ($2)" >&2; exit 1; fi
+    set_sources "$2"
+    echo "🧩 Sources: $2"
+    # config-only edit works unplugged, like `aeasy screen`
+    if plugged; then server_start; sleep 1; app_open; else echo "   (plug the phone in to apply)"; fi
     ;;
   status)
     W=$(grep -m1 '^WIFI_ADDR=' "$CFG" 2>/dev/null | cut -d= -f2)
@@ -114,8 +136,10 @@ case "${1:-start}" in
       if plugged; then echo "🔌 Cable: connected ($(adb shell getprop ro.product.model 2>/dev/null))"; else echo "🔌 Cable: not connected"; fi
     fi
     pgrep -qf aeasy-server && echo "🖥  Server: running" || echo "🖥  Server: stopped"
-    if grep -q 'LAGGY' "$LOG" 2>/dev/null; then
-      echo "🐢 Lag was detected (phone decoder falling behind) — recommended: aeasy tune"
+    # only this server run: the log is append-only and quality is auto-lowered live now,
+    # so an old LAGGY line would recommend tuning forever
+    if tail -r "$LOG" 2>/dev/null | sed -n '1,/listening on/p' | grep -q 'LAGGY'; then
+      echo "🐢 Lag detected — quality was lowered automatically (secondary panes first)"
     fi
     pgrep -qf "aeasy _watch" && echo "👀 Watcher: running" || echo "👀 Watcher: stopped"
     plugged && { adb shell pidof $APP >/dev/null 2>&1 && echo "📱 Phone app: open" || echo "📱 Phone app: closed"; }
@@ -128,7 +152,7 @@ case "${1:-start}" in
     ;;
   tune)
     mkdir -p "$SHARE"
-    { grep -vE '^(FPS|BITRATE|SCALE|AUTO)=' "$CFG" 2>/dev/null; echo "FPS=15"; echo "BITRATE=1500000"; echo "SCALE=60"; echo "AUTO=0"; } > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
+    { grep -vE '^(FPS|BITRATE|SCALE|AUTO)=' "$CFG" 2>/dev/null; echo "FPS=15"; echo "BITRATE=1500000"; echo "SCALE=60"; } > "$CFG.tmp" && mv "$CFG.tmp" "$CFG"
     echo "⚡ Low-latency preset: 15fps / 1.5Mbps / 60% resolution (good for budget phones)"
     echo "   fine-tune: aeasy config"
     if plugged; then server_start; sleep 1; app_open; fi
@@ -172,6 +196,8 @@ aeasy — ใช้มือถือ Android เป็นจอเสริม�
   aeasy app            เปิดแอปบนมือถือ (แจ้งเตือนถ้าไม่ได้เสียบสาย)
   aeasy mirror <แอพ>   mirror เฉพาะหน้าต่างแอพเดียว เช่น: aeasy mirror Safari
   aeasy screen         กลับเป็นโหมดจอเสริมเต็มจอ
+  aeasy sources [ลิสต์] ดู/ตั้งแหล่งภาพได้สูงสุด 3 อัน แสดงซ้อนกันบนมือถือ
+                       เช่น: aeasy sources display,window:Safari  (ลากจัดตำแหน่งได้ในแอปมือถือ)
   aeasy config         เปิดหน้าต่างตั้งค่า (fps / bitrate / ความละเอียด / โหมด)
   aeasy tune           ตั้งค่าโหมดลื่นสำหรับมือถือช้า (15fps / 60%) — ใช้เมื่อภาพหน่วง
   aeasy wifi           เปลี่ยนเป็นโหมดไร้สาย (เสียบสายครั้งเดียวตอนเปิดใช้ แล้วถอดได้เลย)
@@ -190,6 +216,8 @@ aeasy — use an Android phone as a second display for your Mac over USB-C (alia
   aeasy app            launch the viewer app on the phone (warns if unplugged)
   aeasy mirror <App>   mirror a single app window, e.g.: aeasy mirror Safari
   aeasy screen         back to full extended-display mode
+  aeasy sources [list] show/set up to 3 sources shown as panes on the phone
+                       e.g.: aeasy sources display,window:Safari  (drag to arrange in the app)
   aeasy config         open the settings GUI (fps / bitrate / resolution / mode)
   aeasy tune           low-latency preset for slower phones (15fps / 60%) — use when laggy
   aeasy wifi           switch to wireless mode (cable needed once to enable, then unplug)

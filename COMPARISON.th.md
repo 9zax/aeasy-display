@@ -16,6 +16,7 @@
 | ความหน่วง | ต่ำ (hw encode/decode ทั้งสาย) | ปานกลาง–สูง (software encode ผ่าน browser) | ปานกลาง (มี hw encode บางแพลตฟอร์ม) | สูง (VNC ไม่เหมาะกับวิดีโอ) | ต่ำมาก (ออกแบบมาเพื่อเกม) |
 | ส่ง input กลับ (touch/ปากกา) | ✅ แตะ+ลาก (ไม่มีแรงกดปากกา/scroll) | ❌ | ✅ จุดขายหลัก (stylus แรงกด — Linux เท่านั้น) | ✅ ผ่าน VNC | ✅ (เมาส์/คีย์/จอย) |
 | หมุนจออัตโนมัติ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| หลายแหล่งภาพพร้อมกัน | ✅ สูงสุด 3 pane (จอเสริม + หน้าต่างแอป) ลากจัดวางสดได้จากทั้งสองฝั่ง | ❌ | ❌ | ❌ | ⚠️ สตรีมเดียวต่อ session |
 | สถานะโปรเจกต์ | ใหม่ | active แต่ virtual display "อยู่ใน roadmap" มานาน | active | ⚠️ หยุดพัฒนา (commit สุดท้าย 2018) | active มาก ชุมชนใหญ่ |
 
 ## สรุปรายเจ้า
@@ -37,7 +38,7 @@
 - **ด้อย**: เป็น game-streaming ไม่ใช่เครื่องมือจอเสริม — บน macOS ต้องหา virtual display เองด้วย dummy plug หรือ [BetterDisplay](https://github.com/waydabber/BetterDisplay) (freemium) แล้วชี้ Sunshine ให้สตรีมจอนั้น, setup หลายชิ้น, ผ่านเครือข่าย
 
 ### จุดยืนของ AEasy Display ในกลุ่มนี้
-เป็นตัวเดียวที่ **"จอเสริม macOS → Android ผ่านสาย USB จบในคำสั่งเดียว"** — สร้าง virtual display เอง, hw encode/decode ตลอดสาย, ไม่ใช้เครือข่าย, หมุนจอตามเครื่อง แลกกับการที่รองรับแค่ macOS+Android, ไม่มีเสียง และยังไม่รองรับ scroll/หลายนิ้ว
+เป็นตัวเดียวที่ **"จอเสริม macOS → Android ผ่านสาย USB จบในคำสั่งเดียว"** — สร้าง virtual display เอง, hw encode/decode ตลอดสาย, ไม่ใช้เครือข่าย, หมุนจอตามเครื่อง และสตรีมได้สูงสุด **3 แหล่งภาพพร้อมกัน**เป็น pane ลากจัดวางได้ (จอเสริม + หน้าต่างแอป) แยกสตรีมอิสระต่อ pane แลกกับการที่รองรับแค่ macOS+Android, ไม่มีเสียง และยังไม่รองรับ scroll/หลายนิ้ว
 
 ---
 
@@ -68,7 +69,8 @@
 
 - **ทำสิ่งที่ scrcpy ทำไม่ได้บน macOS** — สร้าง virtual display จริงบน Mac (`CGVirtualDisplay`) ให้ลากหน้าต่างไปวางบนมือถือได้เหมือนจอเสริมแท้ ๆ
 - **Zero network** — ทุกอย่างวิ่งผ่านสาย USB (`adb reverse`) ไม่แย่ง Wi-Fi ใช้กลางแจ้ง/บนรถได้
-- **Auto mode** — วัด frame-drop จริงแล้วลดคุณภาพให้อัตโนมัติถ้าเครื่องถอดรหัสไม่ทัน
+- **หลายแหล่งภาพพร้อมกัน** — `aeasy sources display,window:Safari` แสดงได้สูงสุด 3 pane ซ้อนกัน ลากย้าย/ปรับขนาดสดจากมือถือหรือ `aeasy config` ก็ได้ แตะ pane แล้วสั่งงานหน้าต่างจริงข้างหลังได้เลย
+- **ลดคุณภาพตามโหลด** — วัด frame-drop จริงรายสตรีมแล้วลด bitrate/fps ให้ทันที pane รองโดนก่อน pane หลัก และไม่ต้อง restart
 - **Auto-rotation** — หมุนมือถือแล้ว virtual display ฝั่ง Mac หมุนตาม (portrait ↔ landscape) ใช้พื้นที่จอเต็มแผง
 - **Mirror รายแอป** — `aeasy mirror Safari` ส่งเฉพาะหน้าต่างแอปเดียวไปโชว์บนมือถือ
 - **Hardware ทั้งสาย** — ScreenCaptureKit + VideoToolbox ฝั่ง Mac, MediaCodec ฝั่ง Android กิน CPU ต่ำ

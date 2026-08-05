@@ -16,6 +16,7 @@ Compared against the closest open source projects: [scrcpy](https://github.com/G
 | Latency | low (hw encode/decode end to end) | medium–high (software encode via browser) | medium (hw encode on some platforms) | high (VNC isn't built for video) | very low (built for game streaming) |
 | Input back (touch/stylus) | ✅ tap + drag (no stylus pressure/scroll) | ❌ | ✅ its main selling point (pressure stylus — Linux only) | ✅ via VNC | ✅ (mouse/keyboard/gamepad) |
 | Auto-rotation | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Several sources at once | ✅ up to 3 panes (display + app windows), arrangeable live from either side | ❌ | ❌ | ❌ | ⚠️ one stream per session |
 | Project status | new | active, but virtual display has been "on the roadmap" for years | active | ⚠️ abandoned (last commit 2018) | very active, large community |
 
 ## Project by project
@@ -37,7 +38,7 @@ Compared against the closest open source projects: [scrcpy](https://github.com/G
 - **Weaknesses**: it's game streaming, not a second-display tool — on macOS you must supply the virtual display yourself with a dummy plug or [BetterDisplay](https://github.com/waydabber/BetterDisplay) (freemium) and point Sunshine at it; multiple moving parts; runs over the network.
 
 ### Where AEasy Display fits
-The only one that does **"macOS → Android second display over a USB cable, in one command"** — creates its own virtual display, hardware encode/decode end to end, zero network, and the display rotates with the phone. The trade-off: macOS+Android only, no audio, no scroll/multi-finger gestures.
+The only one that does **"macOS → Android second display over a USB cable, in one command"** — creates its own virtual display, hardware encode/decode end to end, zero network, the display rotates with the phone, and up to **three sources stream at once** as draggable panes (the extended display plus app windows), each an independent stream. The trade-off: macOS+Android only, no audio, no scroll/multi-finger gestures.
 
 ---
 
@@ -68,7 +69,8 @@ The only one that does **"macOS → Android second display over a USB cable, in 
 
 - **Does what scrcpy can't on macOS** — creates a real virtual display (`CGVirtualDisplay`) so you can drag windows onto the phone like a genuine second monitor
 - **Zero network** — everything runs over the USB cable (`adb reverse`); never fights your Wi-Fi, works on the go
-- **Auto mode** — measures the real frame-drop rate and steps quality down automatically if the phone's decoder can't keep up
+- **Multi-source panes** — `aeasy sources display,window:Safari` shows up to three Mac sources as overlapping panes, draggable and resizable live from the phone or from `aeasy config`; touch on a pane drives the real window behind it
+- **Load-aware quality** — measures the real per-stream frame-drop rate and steps bitrate/fps down on the fly, secondary panes before the main one, with no restart
 - **Auto-rotation** — rotate the phone and the Mac-side virtual display follows (portrait ↔ landscape), always using the full panel
 - **Per-app mirroring** — `aeasy mirror Safari` streams a single app window to the phone
 - **Hardware all the way** — ScreenCaptureKit + VideoToolbox on the Mac, MediaCodec on Android; low CPU use

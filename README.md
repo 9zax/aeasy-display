@@ -52,7 +52,7 @@ flowchart LR
 
 - macOS 13+ (Apple Silicon or Intel), Xcode Command Line Tools
 - Homebrew (for `adb` via `android-platform-tools`)
-- An Android 8+ phone with **USB debugging** enabled
+- An Android 8+ phone or tablet with **USB debugging** enabled
 - A USB-C cable
 
 ## Install
@@ -99,7 +99,8 @@ aeasy start     # start everything (aliased as `aez`)
 | `aeasy app` | Launch the viewer app on the phone (warns if unplugged). |
 | `aeasy mirror Safari` | Mirror **one app window** instead of extending — great for keeping an eye on a single app. |
 | `aeasy screen` | Back to extended-display mode. |
-| `aeasy config` | Open the settings GUI (frame rate, bitrate, resolution, mode). |
+| `aeasy sources display,window:Safari` | Show **up to 3 sources at once** as panes on the phone. No argument prints the current set. |
+| `aeasy config` | Open the settings GUI (frame rate, bitrate, resolution, sources, pane layout). |
 | `aeasy tune` | One-shot low-latency preset (15fps / 60% resolution) for slower phones. |
 | `aeasy wifi` | Switch to **wireless mode** — plug the cable once to enable, then unplug and roam. |
 | `aeasy usb` | Back to USB mode. |
@@ -107,9 +108,15 @@ aeasy start     # start everything (aliased as `aez`)
 | `aeasy install-app` | Install the bundled APK onto the phone. |
 | `aeasy log` | Tail the server log. |
 
-### Auto mode (first connection)
+### Several sources at once
 
-On the very first connection AEasy runs in **auto mode**: it starts at 20fps/80% and watches the real frame-drop rate. If your phone's decoder can't keep up, it automatically steps quality down (→ 15fps/60% → 12fps/50%), posts a macOS notification about what it changed, and restarts the stream. The moment you pick your own settings (`aeasy config` or `aeasy tune`), auto mode turns off and respects your choice.
+`aeasy sources display,window:Safari` streams the extended display *and* a Safari window as two overlapping panes on the phone — up to three. Each pane is an independent stream, so one app quitting doesn't disturb the others.
+
+Tap **Arrange** on the phone to drag panes around and resize them by their bottom-right corner; tap **Done** to go back to controlling the Mac. The same layout is draggable in `aeasy config`, and both sides stay in sync live. Touching a pane drives the real window behind it — the window is brought to the front first.
+
+### Quality under load
+
+AEasy watches the real frame-drop rate. If your phone's decoder can't keep up, it lowers that stream's bitrate and frame rate on the fly — no restart, and **secondary panes are stepped down before the main one**. Only if everything has bottomed out does it fall back to a notification suggesting `aeasy tune`.
 
 ### Auto-rotation
 
@@ -156,8 +163,7 @@ If the app has several windows, the largest on-screen one is used. If no matchin
 | `FPS` | `20` | Capture/encode frame rate (10–30). Lower = less latency on slow phones. |
 | `BITRATE` | `2000000` | Video bitrate in bps. |
 | `SCALE` | `80` | Encode resolution as % of the phone panel. Lower = lighter decode. |
-| `MODE` | `display` | `display` (extended) or `window` (mirror one app). |
-| `WINDOW_APP` | – | App name to mirror when `MODE=window`. |
+| `SOURCES` | `display` | Up to 3, comma-separated: `display` and/or `window:<AppName>`. Set by `aeasy sources`/`mirror`/`screen`. The first entry is the main pane, and `display` is always moved first. |
 | `CODEC` | `h264` | `h264` or `hevc`. HEVC looks better at the same bitrate; if your phone can't decode it (black screen), set back to `h264`. |
 | `WIFI_ADDR` | – | Set by `aeasy wifi`, cleared by `aeasy usb` — don't edit by hand. |
 
@@ -188,7 +194,7 @@ aeasy-display/
 
 ## Limitations
 
-- No touch input back to the Mac, no audio (PRs welcome).
+- No audio, and touch is tap + drag only — no scrolling, multi-finger gestures, or stylus pressure (PRs welcome).
 - Uses the private `CGVirtualDisplay` API — the same one other virtual-display tools rely on; it may change in future macOS releases.
 - One phone at a time (the stream itself supports multiple viewers).
 

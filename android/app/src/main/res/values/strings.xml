@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AEasy Display</string>
+
+    <string name="arrange_toggle">Arrange</string>
+    <string name="arrange_toggle_done">Done</string>
+    <string name="arrange_toggle_desc">Toggle arrange mode</string>
+    <string name="arrange_on">Arrange mode on — drag to move, drag a corner to resize</string>
+    <string name="arrange_off">Arrange mode off — tap to control the Mac</string>
+
+    <string name="pane_window_closed">\"%1$s\" window closed</string>
+    <string name="pane_decoder_unavailable">Decoder unavailable</string>
+    <string name="pane_decoder_detail">This device can\'t decode this many streams</string>
+    <string name="pane_retry">Retry</string>
+    <string name="pane_connecting">Connecting…</string>
+    <string name="pane_connection_lost">Connection lost — reconnecting…</string>
+    <string name="pane_source_unavailable">Source not available</string>
+
+    <string name="err_no_accessibility">Taps do nothing until Accessibility is granted on the Mac</string>
+    <string name="err_too_many_sources">Maximum 3 sources</string>
+    <string name="err_mac">Mac error: %1$s</string>
+
+    <string name="pane_desc">Source %1$s</string>
+    <string name="reset_layout">Reset layout</string>
+</resources>
