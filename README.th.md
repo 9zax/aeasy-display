@@ -6,7 +6,7 @@
 
 <p align="center"><a href="README.md">English</a> · <b>ภาษาไทย</b></p>
 
-**เปลี่ยนมือถือ Android ให้เป็นจอที่สองของ Mac — ผ่านสาย USB-C เส้นเดียว ไม่ใช้ Wi-Fi ไม่ต้องสมัครอะไร ไม่มีแอปเสียเงิน**
+**เปลี่ยนมือถือ Android ให้เป็นจอที่สองแบบสัมผัสได้ของ Mac — ผ่านสาย USB-C หรือ Wi-Fi ไม่ต้องสมัครอะไร ไม่มีแอปเสียเงิน**
 
 ![Platform](https://img.shields.io/badge/macOS-13%2B-blue) ![Android](https://img.shields.io/badge/Android-8%2B-green) ![License](https://img.shields.io/badge/license-MIT-lightgrey) [![Release](https://img.shields.io/github/v/release/9zax/aeasy-display)](https://github.com/9zax/aeasy-display/releases/latest)
 
@@ -14,7 +14,7 @@
   <img src="docs/demo.jpg" width="720" alt="ตัวอย่างการใช้งาน AEasy Display — มือถือ Android เป็นจอที่สองของ Mac">
 </p>
 
-เสียบสาย → มือถือกลายเป็นจอ macOS จริง ๆ ลากหน้าต่างไปวางได้เลย หมุนมือถือแล้วจอหมุนตาม หรือจะ mirror หน้าต่างแอปเดียวก็ได้ ทุกอย่างสตรีมเป็น H.264 เข้ารหัสด้วยฮาร์ดแวร์ผ่านสาย USB ด้วย `adb reverse` — ไม่ยุ่งกับเครือข่ายเลย ใช้นอกบ้านได้ และไม่แย่ง Wi-Fi
+เสียบสาย → มือถือกลายเป็นจอ macOS จริง ๆ ลากหน้าต่างไปวางได้เลย **แตะจอเพื่อคลิก/ลาก**หน้าต่างบนมือถือได้เหมือนจอ touchscreen หมุนเครื่องแล้วจอหมุนตาม หรือจะ mirror หน้าต่างแอปเดียวก็ได้ ทุกอย่างสตรีมเป็น H.264/HEVC เข้ารหัสด้วยฮาร์ดแวร์ผ่าน `adb reverse` — ค่าเริ่มต้นวิ่งบนสาย USB (ไม่ยุ่งเครือข่าย ใช้นอกบ้านได้) หรือถอดสายเป็นไร้สายด้วย `aeasy wifi`
 
 ```
 ┌─────────────────────┐         สาย USB-C            ┌──────────────┐

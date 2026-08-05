@@ -6,7 +6,7 @@
 
 <p align="center"><b>English</b> · <a href="README.th.md">ภาษาไทย</a></p>
 
-**Turn your Android phone into a second display for your Mac — over a USB-C cable. No Wi-Fi, no accounts, no paid apps.**
+**Turn your Android phone into a touchscreen second display for your Mac — over a USB-C cable or Wi-Fi. No accounts, no paid apps.**
 
 ![Platform](https://img.shields.io/badge/macOS-13%2B-blue) ![Android](https://img.shields.io/badge/Android-8%2B-green) ![License](https://img.shields.io/badge/license-MIT-lightgrey) [![Release](https://img.shields.io/github/v/release/9zax/aeasy-display)](https://github.com/9zax/aeasy-display/releases/latest)
 
@@ -14,7 +14,7 @@
   <img src="docs/demo.jpg" width="720" alt="AEasy Display demo — Android phone as a second display for a Mac">
 </p>
 
-Plug in the cable → your phone becomes a real macOS display. Drag windows to it, rotate the phone and the screen follows, or mirror a single app window. Everything streams hardware-encoded H.264 through the USB cable via `adb reverse` — zero network involved, so it works on the go and never fights your Wi-Fi.
+Plug in the cable → your phone becomes a real macOS display. Drag windows to it, **touch the screen** to click and drag them right on the phone, rotate it and the display follows, or mirror a single app window. Everything streams hardware-encoded H.264/HEVC via `adb reverse` — over USB by default (zero network, works on the go), or cable-free with `aeasy wifi`.
 
 How does it stack up against scrcpy, Deskreen, Weylus, and friends? See [COMPARISON.md](COMPARISON.md).
 
