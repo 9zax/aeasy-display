@@ -18,7 +18,7 @@
 
   <!-- headline -->
   <text x="540" y="150" text-anchor="middle" font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif" font-size="58" font-weight="700" fill="#F1F5F9">Your old Android isn't junk 📱</text>
-  <text x="540" y="230" text-anchor="middle" font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif" font-size="44" font-weight="500" fill="#A5B4FC">One cable. Second display for your Mac.</text>
+  <text x="540" y="230" text-anchor="middle" font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif" font-size="44" font-weight="500" fill="#A5B4FC">Touchscreen Mac display, over cable or Wi-Fi.</text>
 
   <!-- screen glow -->
   <g filter="url(#glow)" opacity="0.65">
@@ -31,6 +31,12 @@
   <circle cx="562" cy="838" r="9" fill="#22D3EE"/>
   <circle cx="696" cy="872" r="9" fill="#22D3EE"/>
   <rect x="844" y="834" width="32" height="24" rx="8" fill="#64748B"/>
+  <!-- wireless option -->
+  <g transform="translate(648,770) scale(2)" stroke="#22D3EE" fill="none" stroke-width="3" stroke-linecap="round" opacity="0.9">
+    <path d="M-14,-4 a20,20 0 0 1 28,0"/>
+    <path d="M-8,3 a11,11 0 0 1 16,0"/>
+    <circle cx="0" cy="9" r="2.5" fill="#22D3EE" stroke="none"/>
+  </g>
 
   <!-- MacBook -->
   <rect x="276" y="336" width="468" height="314" rx="28" fill="#E2E8F0"/>
@@ -42,8 +48,16 @@
   <rect x="742" y="424" width="222" height="424" rx="44" fill="#E2E8F0"/>
   <rect x="762" y="444" width="182" height="384" rx="28" fill="url(#aurora)"/>
   <circle cx="853" cy="468" r="7" fill="#0F172A" fill-opacity="0.55"/>
+  <!-- floating panes on the phone -->
+  <rect x="776" y="560" width="96" height="72" rx="8" fill="#0F172A" fill-opacity="0.55" stroke="#F8FAFC" stroke-opacity="0.75" stroke-width="3"/>
+  <rect x="776" y="560" width="96" height="12" rx="6" fill="#F8FAFC" fill-opacity="0.35"/>
+  <rect x="822" y="650" width="106" height="84" rx="8" fill="#0F172A" fill-opacity="0.55" stroke="#F8FAFC" stroke-opacity="0.75" stroke-width="3"/>
+  <rect x="822" y="650" width="106" height="12" rx="6" fill="#F8FAFC" fill-opacity="0.35"/>
+  <!-- touch ripple -->
+  <circle cx="838" cy="774" r="18" fill="none" stroke="#22D3EE" stroke-width="4" opacity="0.9"/>
+  <circle cx="838" cy="774" r="6" fill="#22D3EE"/>
 
   <!-- footer -->
   <text x="540" y="960" text-anchor="middle" font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif" font-size="64" font-weight="800" fill="#F1F5F9">AEasy Display</text>
-  <text x="540" y="1020" text-anchor="middle" font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif" font-size="34" font-weight="500" fill="#94A3B8">Free · Open source · No Wi-Fi needed · Just a USB-C cable 🔌</text>
+  <text x="540" y="1020" text-anchor="middle" font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif" font-size="34" font-weight="500" fill="#94A3B8">Free · Open source · Touch input · USB-C or Wi-Fi</text>
 </svg>

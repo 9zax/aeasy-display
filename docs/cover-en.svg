@@ -38,24 +38,24 @@
   <text x="156" y="96" font-size="28" font-weight="600" fill="#E2E8F0">AEasy Display</text>
 
   <!-- headline -->
-  <text x="80" y="230" font-size="52" font-weight="800" fill="#F8FAFC">Turn your Android phone</text>
-  <text x="80" y="296" font-size="52" font-weight="800" fill="url(#accent)">into a second Mac display</text>
+  <text x="80" y="230" font-size="52" font-weight="800" fill="#F8FAFC">Your Android is now a</text>
+  <text x="80" y="296" font-size="52" font-weight="800" fill="url(#accent)">touchscreen Mac display</text>
 
   <!-- subline -->
-  <text x="80" y="356" font-size="24" fill="#94A3B8">Plug in one USB-C cable — your phone becomes</text>
-  <text x="80" y="392" font-size="24" fill="#94A3B8">a real macOS display. Zero network involved.</text>
+  <text x="80" y="356" font-size="24" fill="#94A3B8">Phone or tablet, USB-C cable or Wi-Fi.</text>
+  <text x="80" y="392" font-size="24" fill="#94A3B8">Touch to click. Up to 3 app panes at once.</text>
 
   <!-- pills -->
   <g font-size="19" fill="#CBD5E1">
-    <rect x="80" y="440" width="128" height="44" rx="22" fill="#131C2E" stroke="#334155"/>
-    <text x="144" y="468" text-anchor="middle">No Wi-Fi</text>
-    <rect x="224" y="440" width="156" height="44" rx="22" fill="#131C2E" stroke="#334155"/>
-    <text x="302" y="468" text-anchor="middle">No accounts</text>
-    <rect x="396" y="440" width="200" height="44" rx="22" fill="#131C2E" stroke="#334155"/>
-    <text x="496" y="468" text-anchor="middle">Free &amp; open source</text>
+    <rect x="80" y="440" width="140" height="44" rx="22" fill="#131C2E" stroke="#334155"/>
+    <text x="150" y="468" text-anchor="middle">Touch input</text>
+    <rect x="236" y="440" width="150" height="44" rx="22" fill="#131C2E" stroke="#334155"/>
+    <text x="311" y="468" text-anchor="middle">USB or Wi-Fi</text>
+    <rect x="402" y="440" width="176" height="44" rx="22" fill="#131C2E" stroke="#334155"/>
+    <text x="490" y="468" text-anchor="middle">3 panes at once</text>
   </g>
 
-  <text x="80" y="576" font-size="19" fill="#64748B">macOS 13+ · Android 8+ · Hardware-encoded H.264 over adb reverse</text>
+  <text x="80" y="576" font-size="19" fill="#64748B">macOS 13+ · Android 8+ · Hardware H.264/HEVC · Free &amp; open source</text>
 
   <!-- illustration -->
   <g transform="translate(620,40) scale(1.32)">
@@ -66,6 +66,12 @@
     <path d="M212,304 C212,368 300,402 340,402 C368,402 386,400 386,388" fill="none" stroke="#475569" stroke-width="9" stroke-linecap="round"/>
     <circle cx="238" cy="382" r="4.5" fill="#22D3EE"/>
     <circle cx="304" cy="399" r="4.5" fill="#22D3EE"/>
+    <!-- wireless option -->
+    <g transform="translate(296,338)" stroke="#22D3EE" fill="none" stroke-width="3" stroke-linecap="round" opacity="0.9">
+      <path d="M-14,-4 a20,20 0 0 1 28,0"/>
+      <path d="M-8,3 a11,11 0 0 1 16,0"/>
+      <circle cx="0" cy="9" r="2.5" fill="#22D3EE" stroke="none"/>
+    </g>
     <rect x="96" y="132" width="232" height="156" rx="14" fill="#E2E8F0"/>
     <rect x="108" y="144" width="208" height="132" rx="6" fill="url(#aurora)"/>
     <rect x="76" y="288" width="272" height="16" rx="8" fill="#CBD5E1"/>
@@ -73,5 +79,15 @@
     <rect x="330" y="176" width="110" height="210" rx="22" fill="#E2E8F0"/>
     <rect x="340" y="186" width="90" height="190" rx="14" fill="url(#aurora)"/>
     <circle cx="385" cy="198" r="3.5" fill="#0F172A" fill-opacity="0.55"/>
+    <!-- floating panes on the phone -->
+    <g>
+      <rect x="347" y="246" width="48" height="36" rx="4" fill="#0F172A" fill-opacity="0.55" stroke="#F8FAFC" stroke-opacity="0.75" stroke-width="1.5"/>
+      <rect x="347" y="246" width="48" height="6" rx="3" fill="#F8FAFC" fill-opacity="0.35"/>
+      <rect x="369" y="292" width="54" height="42" rx="4" fill="#0F172A" fill-opacity="0.55" stroke="#F8FAFC" stroke-opacity="0.75" stroke-width="1.5"/>
+      <rect x="369" y="292" width="54" height="6" rx="3" fill="#F8FAFC" fill-opacity="0.35"/>
+    </g>
+    <!-- touch ripple -->
+    <circle cx="376" cy="352" r="9" fill="none" stroke="#22D3EE" stroke-width="2" opacity="0.9"/>
+    <circle cx="376" cy="352" r="3" fill="#22D3EE"/>
   </g>
 </svg>
