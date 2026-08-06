@@ -21,6 +21,7 @@ make clean
 - Swift builds target macOS 13 explicitly (`-target ...-apple-macos13.0`) — don't use newer-than-13 APIs; they compile silently against the host SDK.
 - `make build` invalidates the Accessibility grant on `aeasy-server`; touch input needs it re-toggled after rebuilds.
 - Releases go through the `9zax` GitHub account, not `nakarin-w`.
+- Homebrew formula lives in `9zax/homebrew-tap` (`Formula/aeasy-display.rb`) and pins the sha256 of GitHub's auto-generated tag tarball — those bytes are NOT stable (GitHub can regenerate them, and retagging changes them). The tap's `repin-checksums` workflow re-pins drifted sha256s daily; after tagging a release, trigger it immediately (`gh workflow run repin.yml -R 9zax/homebrew-tap`) instead of waiting for the cron. Never move a published tag.
 
 ## Architecture
 
